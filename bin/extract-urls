@@ -28,6 +28,10 @@ $extra = length($extra // '') ? qr/$extra/ : undef;
 my %seen;
 sub emit { my ($url) = @_; print "$url\n" unless $seen{$url}++ }
 
+# Drop closing brackets and sentence punctuation that follow a URL in prose,
+# such as the ")" in "(git@github.com:user/repo.git)".
+sub trim { my ($s) = @_; $s =~ s/[)\]}>.,;:!?]+$//; return $s }
+
 while (my $line = <STDIN>) {
     $line =~ s/\e\[[0-9;?]*[a-zA-Z]//g;      # CSI: colors, cursor movement
     $line =~ s/\e\]8;[^;\a\e]*;([^\a\e]*)(?:\a|\e\\)/ $1 /g;  # OSC 8: keep hyperlink targets
@@ -43,9 +47,9 @@ while (my $line = <STDIN>) {
         }gx
     ) {
         if    (defined $+{url})      { emit($+{url}) }
-        elsif (defined $+{git_host}) { emit("https://$+{git_host}/$+{git_path}") }
-        elsif (defined $+{www})      { emit("http://$+{www}") }
-        elsif (defined $+{ip})       { emit("http://$+{ip}") }
+        elsif (defined $+{git_host}) { emit(trim("https://$+{git_host}/$+{git_path}")) }
+        elsif (defined $+{www})      { emit(trim("http://$+{www}")) }
+        elsif (defined $+{ip})       { emit(trim("http://$+{ip}")) }
         elsif (defined $+{gh})       { emit("https://github.com/$+{gh}") }
     }
 

@@ -34,6 +34,14 @@ check "git ssh remote rewritten" \
   "origin  git@github.com:wfxr/xre.git (fetch)" \
   "https://github.com/wfxr/xre.git"
 
+check "git remote in parentheses drops the closing paren" \
+  "clone (git@github.com:devert/rex-fzf-url.git) now" \
+  "https://github.com/devert/rex-fzf-url.git"
+
+check "www path in parentheses drops the closing paren" \
+  "(see www.example.com/docs)" \
+  "http://www.example.com/docs"
+
 check "bare www prefixed" \
   "docs at www.rust-lang.org today" \
   "http://www.rust-lang.org"
