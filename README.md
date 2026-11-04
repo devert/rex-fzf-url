@@ -85,6 +85,12 @@ The largest size of the floating pane, as a fraction of the window. A value must
 
 **Default**: `max_width = 0.6` and `max_height = 0.4`.
 
+### `max_scrollback`
+
+The most text to read from the pane, in bytes. A large scrollback makes the list open more slowly. If the pane has more text than this value, the plugin reads only the newest lines that fit. The newest URLs are at the top of the list, so the lost URLs are the oldest ones. To find older URLs, set a larger value, such as `4 * 1024 * 1024` for 4 MB.
+
+**Default**: `512 * 1024` (512 KB). That is about 6,000 lines of 80 characters.
+
 ### `extra_pattern` and `extra_sub`
 
 Use these two values to find your own kind of text, such as issue names like `ENG-123`. You must set both values:

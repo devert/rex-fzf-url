@@ -10,6 +10,10 @@
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
+#   FZF_URL_ROWS         the starting height of the pane, in rows
+#   FZF_URL_COUNT        the number of URLs in the file
+#   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
+#   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
 set -u
 
 # Rex doesn't give focus back to the pane that ran the action when a floating
@@ -32,7 +36,7 @@ command -v fzf >/dev/null 2>&1 || fail "fzf not found in PATH"
 
 url_file="${1:-}"
 [[ -n "$url_file" && -f "$url_file" ]] || fail "no URL list file"
-urls=$(cat "$url_file")
+urls=$(<"$url_file")
 rm -f "$url_file"
 [[ -z "$urls" ]] && exit 0
 
@@ -40,19 +44,44 @@ rm -f "$url_file"
 # plus 5 rows for the prompt, the help text, two border lines, and the bottom
 # padding. The pane can be a row taller than that, and the extra row is then
 # at the bottom, below the padding.
-# The app sets the size of a new pane shortly after it opens. Until then the
-# terminal has the default size of 80x24. fzf draws in place with --height,
-# so lines that it draws before the resize stay on the screen. So wait for
-# the resize, for at most half a second.
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
-    [[ "$(stty size 2>/dev/null)" != "24 80" ]] && break
-    sleep 0.02
-done
+# init.lua starts the terminal at the smallest size that the pane can get,
+# and sets FZF_URL_ROWS to its height. Without it, the terminal starts at the
+# default size of 80x24, and the app sets the size of the pane shortly after
+# it opens. fzf draws in place with --height, so lines that it draws before
+# the resize stay on the screen. So then wait for the resize, for at most
+# half a second.
+if [[ -z "${FZF_URL_ROWS:-}" ]]; then
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+        [[ "$(stty size 2>/dev/null)" != "24 80" ]] && break
+        sleep 0.02
+    done
+fi
 
-count=$(printf '%s\n' "$urls" | wc -l | tr -d ' ')
+# Count the URLs in bash when init.lua doesn't pass the count.
+count=${FZF_URL_COUNT:-}
+if [[ -z "$count" ]]; then
+    set -f
+    old_ifs=$IFS
+    IFS=$'\n'
+    lines=($urls)
+    IFS=$old_ifs
+    set +f
+    count=${#lines[@]}
+fi
 height=$((count + 5))
-lines=$(tput lines 2>/dev/null || echo "$height")
-[[ "$height" -gt "$lines" ]] && height=$lines
+# With more URLs than fit, fill the pane and scroll the list. fzf limits
+# --height to the pane height, also after a resize. But the pane can get a
+# row more than FZF_URL_ROWS, and fzf would then grow by a row while you
+# watch. So use FZF_URL_ROWS as the height.
+[[ -n "${FZF_URL_ROWS:-}" && "$height" -gt "$FZF_URL_ROWS" ]] && height=$FZF_URL_ROWS
+
+# Save the size that the app gives this pane, so that the next popup in this
+# window fits its content exactly. This runs in the background, so fzf starts
+# at once. It doesn't change this pane. Rex sets REX_BLOCK in its panes.
+if [[ -n "${FZF_URL_MEASURE:-}" && -n "${FZF_URL_CACHE:-}" && -n "${REX_BLOCK:-}" ]]; then
+    "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "${0%/*}/measure.lua" block="$REX_BLOCK" \
+        cache="$FZF_URL_CACHE" spec="$FZF_URL_MEASURE" >/dev/null 2>&1 &
+fi
 
 # fzf options ported from junegunn/tmux-fzf-url's fzf-url.rb. --expect
 # reports the pressed key (ctrl-y, or empty for Enter) on the first output
@@ -69,8 +98,9 @@ selection=$(printf '%s\n' "$urls" | fzf \
     --height "$height" \
     ${FZF_URL_FZF_OPTIONS:-}) || exit 0
 
-key=$(printf '%s\n' "$selection" | head -n 1)
-chosen=$(printf '%s\n' "$selection" | tail -n +2)
+key=${selection%%$'\n'*}
+chosen=
+[[ "$selection" == *$'\n'* ]] && chosen=${selection#*$'\n'}
 [[ -z "$chosen" ]] && exit 0
 
 get_copy_cmd() {
