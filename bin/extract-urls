@@ -1,0 +1,61 @@
+#!/usr/bin/env perl
+# extract-urls — read terminal text on stdin, print one URL per line,
+# deduplicated, in order of appearance. ANSI/OSC escapes are stripped first.
+#
+# The patterns are ports of wfxr/tmux-fzf-url's `xre` extraction (MIT);
+# this perl implementation is adapted from kaar/herdr-fzf-url (MIT).
+#
+# Patterns run as one alternation per line, so an earlier match consumes its
+# text and a later pattern cannot re-match inside it (https://www.example.com
+# is one URL, not also a www match). Priority order:
+#
+#   URL  https/http/ftp/file URLs, kept verbatim
+#   GIT  git@host:path / ssh://git@host/path  -> https://host/path
+#   WWW  bare www. domains                    -> http://www...
+#   IP   v4 address, optional port and path   -> http://1.2.3.4...
+#   GH   quoted 'user/repo' shorthand         -> https://github.com/user/repo
+#
+# Environment:
+#   FZF_URL_EXTRA_PATTERN  additional perl regex to extract
+#   FZF_URL_EXTRA_SUB      its substitution; $0-$9 refer to capture groups
+use strict;
+use warnings;
+
+my $extra     = $ENV{FZF_URL_EXTRA_PATTERN};
+my $extra_sub = $ENV{FZF_URL_EXTRA_SUB};
+$extra = length($extra // '') ? qr/$extra/ : undef;
+
+my %seen;
+sub emit { my ($url) = @_; print "$url\n" unless $seen{$url}++ }
+
+while (my $line = <STDIN>) {
+    $line =~ s/\e\[[0-9;?]*[a-zA-Z]//g;      # CSI: colors, cursor movement
+    $line =~ s/\e\]8;[^;\a\e]*;([^\a\e]*)(?:\a|\e\\)/ $1 /g;  # OSC 8: keep hyperlink targets
+    $line =~ s/\e\][^\a\e]*(?:\a|\e\\)?//g;  # other OSC: titles, etc.
+
+    while (
+        $line =~ m{
+            (?<url>(?:https?|ftp|file):/?//[-\w+&\@\#/%?=~|!:,.;]*[-\w+&\@\#/%=~|])
+          | (?:ssh://)?git\@(?<git_host>[^\s'"`:]+)[:/](?<git_path>[^\s'"`]+)
+          | (?<www>www\.[a-zA-Z](?:-?[a-zA-Z0-9])+\.[a-zA-Z]{2,}(?:/[^\s'"`]+)*)
+          | (?<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?::\d{1,5})?(?:/[^\s'"`]+)*)
+          | ['"](?<gh>[\w-]+/[\w.-]+)['"]
+        }gx
+    ) {
+        if    (defined $+{url})      { emit($+{url}) }
+        elsif (defined $+{git_host}) { emit("https://$+{git_host}/$+{git_path}") }
+        elsif (defined $+{www})      { emit("http://$+{www}") }
+        elsif (defined $+{ip})       { emit("http://$+{ip}") }
+        elsif (defined $+{gh})       { emit("https://github.com/$+{gh}") }
+    }
+
+    next unless $extra;
+    while ($line =~ /$extra/g) {
+        if (length($extra_sub // '')) {
+            my @g = ($&, $1, $2, $3, $4, $5, $6, $7, $8, $9);
+            (my $out = $extra_sub) =~ s{\$(\d)}{ defined $g[$1] ? $g[$1] : '' }ge;
+            emit($out);
+        }
+        else { emit($&) }
+    }
+}
