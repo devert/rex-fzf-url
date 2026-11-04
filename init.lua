@@ -146,9 +146,9 @@ function M.setup(opts)
 
   rex.action{
     name = "fzf_url",
-    title = "Open URL from Scrollback",
+    title = "Find URLs in Pane",
     description = "Pick a URL from the focused pane's scrollback with fzf, then open or copy it.",
-    keywords = "url link fzf browser open copy",
+    keywords = "url link fzf browser open copy pane scrollback screen",
     run = function(ctx, args)
       if ctx.block_id == nil then fail("no focused pane") end
 

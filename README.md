@@ -1,89 +1,68 @@
 # rex-fzf-url
 
-A [Rex](https://www.superlogical.com/rex) plugin that finds all URLs in the scrollback of the focused pane and displays them in a floating pane picker with [fzf](https://github.com/junegunn/fzf). You select a URL and the plugin opens it in your browser or copies it to the clipboard. Inspired by [junegunn/tmux-fzf-url](https://github.com/junegunn/tmux-fzf-url).
+A [Rex](https://www.superlogical.com/rex) plugin that lets you open or copy a URL from your terminal output.
 
-- Enter opens the selected URL and closes the picker.
-- Ctrl+Y copies the selected URL to the clipboard.
-- Tab selects more than one URL.
+The plugin finds the URLs in the focused pane, including the text that scrolled out of view. It shows them in an [fzf](https://github.com/junegunn/fzf) list in a floating pane. The floating pane opens in the center of the window, over all other panes. You select a URL, and the plugin opens it in your browser or copies it to the clipboard.
 
-The picker opens in a floating pane in the middle of the window. The pane size fits the list of URLs, up to 60% of the window width and 40% of the window height. If there are more URLs than fit, the list scrolls. If a URL is wider than the pane, it wraps. The newest URLs are at the bottom, next to the prompt.
+## Use
 
-The plugin finds these types of text:
+Press the key that you set in the install steps. Then use these keys in the list:
 
-- `http`, `https`, `ftp`, and `file` URLs.
-- Git remotes such as `git@github.com:user/repo.git`. The plugin changes them to `https` URLs.
-- Domains that start with `www.`.
-- IPv4 addresses, with an optional port and path.
-- GitHub names in quotes, such as `'user/repo'`.
+- **Enter** opens the selected URL.
+- **Ctrl+Y** copies the selected URL to the clipboard.
+- **Tab** selects more than one URL.
+
+You can also open the list from the Rex command palette. Search for "Find URLs in Pane".
 
 ## Requirements
 
-- Rex.
-- `fzf` in the `PATH` of your login shell.
-- `perl` and `bash`. macOS includes both.
+- [Rex](https://www.superlogical.com/rex)
+- [`fzf`](https://github.com/junegunn/fzf), in the `PATH` of your login shell (the shell that starts in new panes)
+- [`perl`](https://www.perl.org) and [`bash`](https://www.gnu.org/software/bash/) (macOS includes both)
 
 ## Install
 
-Clone the repository into a `plugins` folder in your Rex configuration folder:
+1. Clone the repository into the `plugins` folder of your Rex configuration:
 
-```sh
-git clone https://github.com/devert/rex-fzf-url.git ~/.config/rex/plugins/rex-fzf-url
-```
+   ```sh
+   git clone https://github.com/devert/rex-fzf-url.git ~/.config/rex/plugins/rex-fzf-url
+   ```
 
-If you set `XDG_CONFIG_HOME`, your Rex configuration folder is `$XDG_CONFIG_HOME/rex`. Clone the repository into `$XDG_CONFIG_HOME/rex/plugins/rex-fzf-url`, and use `$XDG_CONFIG_HOME/rex/init.lua` in the next step.
+2. Add this line to `~/.config/rex/init.lua`:
 
-Add this line to `~/.config/rex/init.lua`:
+   ```lua
+   require("plugins.rex-fzf-url").setup{ key = "ctrl+space>u" }
+   ```
 
-```lua
-require("plugins.rex-fzf-url").setup{ key = "ctrl+space>u" }
-```
+   With this key, you press Ctrl+Space, then U, to open the list. You can set `key` to any key combination that Rex accepts.
 
-Load the changed configuration:
+3. Load the new configuration:
 
-```sh
-rex config reload
-```
+   ```sh
+   rex config reload
+   ```
 
-The `key` option binds a key to the picker. `ctrl+space>u` means that you press Ctrl+Space, then U. If you do not set `key`, the plugin binds no key. You can then bind the `fzf_url` action yourself:
+If you set `XDG_CONFIG_HOME`, use `$XDG_CONFIG_HOME/rex` in place of `~/.config/rex` in steps 1 and 2.
 
-```lua
-require("plugins.rex-fzf-url").setup{}
-rex.bind("cmd+shift+u", "fzf_url")
-```
+## Configuration
 
-You can also start the picker from the command palette. Search for "Open URL from Scrollback".
-
-## Options
-
-All options are optional.
+You do not have to set any of these values:
 
 ```lua
 require("plugins.rex-fzf-url").setup{
-  key = "ctrl+space>u",           -- the key that opens the picker
+  key = "ctrl+space>u",           -- the key that opens the list
   open = "open -a Firefox",       -- the command that opens a URL
   copy_cmd = "pbcopy",            -- the command that copies to the clipboard
-  fzf_options = "--no-wrap",      -- more fzf options
-  extra_pattern = "JIRA-\\d+",    -- one more Perl regex to find
-  extra_sub = "https://jira.example.com/browse/$0",  -- the URL for each match
+  fzf_options = "--no-wrap",      -- extra flags for fzf, such as "--no-wrap" to stop long URLs from wrapping
+  extra_pattern = "ENG-\\d+",     -- one extra pattern to find, such as issue names like ENG-123 (a Perl regex, only one is allowed)
+  extra_sub = "https://linear.app/your-workspace/issue/$0",  -- turn each match into a URL ($0 is the matched text)
 }
 ```
 
-If you do not set `open`, the plugin uses `open` on macOS and `xdg-open` on Linux. If you do not set `copy_cmd`, the plugin uses the first one of `pbcopy`, `wl-copy`, `xclip`, and `xsel` that it finds.
+To find your own kind of text, set `extra_pattern` to a Perl regex (a text pattern) and `extra_sub` to the URL to build from each match.
 
-In `extra_sub`, `$0` is the full match, and `$1` to `$9` are the capture groups.
+If you do not set `open` or `copy_cmd`, the plugin uses the default command for your system.
 
-## Limits
+## License
 
-The plugin reads the scrollback as plain text. If a program shows a link with a label instead of the URL (an OSC 8 hyperlink), the plugin does not find that link.
-
-If the scrollback contains no URLs, a small pane shows "No URLs found." The pane closes after one second, or when you press a key.
-
-## Tests
-
-```sh
-test/extract-urls.test.sh
-```
-
-## Credits and license
-
-MIT. The look and layout of the picker come from [junegunn/tmux-fzf-url](https://github.com/junegunn/tmux-fzf-url) (MIT). The URL patterns come from [wfxr/tmux-fzf-url](https://github.com/wfxr/tmux-fzf-url) (MIT). The Perl script is adapted from [kaar/herdr-fzf-url](https://github.com/kaar/herdr-fzf-url) (MIT).
+MIT. Based on [junegunn/tmux-fzf-url](https://github.com/junegunn/tmux-fzf-url), [wfxr/tmux-fzf-url](https://github.com/wfxr/tmux-fzf-url), and [kaar/herdr-fzf-url](https://github.com/kaar/herdr-fzf-url), all MIT.
