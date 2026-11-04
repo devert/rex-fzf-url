@@ -34,7 +34,7 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
    require("plugins.rex-fzf-url").setup{ key = "ctrl+space>u" }
    ```
 
-   With this key, you press Ctrl+Space, then U, to open the list. You can set `key` to any key combination that Rex accepts.
+   To open the list, press Ctrl+Space, then U. You can set `key` to any key combination that Rex accepts.
 
 3. Load the new configuration:
 
@@ -46,22 +46,58 @@ If you set `XDG_CONFIG_HOME`, use `$XDG_CONFIG_HOME/rex` in place of `~/.config/
 
 ## Configuration
 
-You do not have to set any of these values:
+Every configuration value is optional. Pass the ones that you want to `setup`:
 
 ```lua
 require("plugins.rex-fzf-url").setup{
-  key = "ctrl+space>u",           -- the key that opens the list
-  open = "open -a Firefox",       -- the command that opens a URL
-  copy_cmd = "pbcopy",            -- the command that copies to the clipboard
-  fzf_options = "--no-wrap",      -- extra flags for fzf, such as "--no-wrap" to stop long URLs from wrapping
-  extra_pattern = "ENG-\\d+",     -- one extra pattern to find, such as issue names like ENG-123 (a Perl regex, only one is allowed)
-  extra_sub = "https://linear.app/your-workspace/issue/$0",  -- turn each match into a URL ($0 is the matched text)
+  key = "ctrl+space>u",
+  max_width = 0.8,
 }
 ```
 
-To find your own kind of text, set `extra_pattern` to a Perl regex (a text pattern) and `extra_sub` to the URL to build from each match.
+### `key`
 
-If you do not set `open` or `copy_cmd`, the plugin uses the default command for your system.
+The key that opens the list, such as `"ctrl+space>u"`.
+
+**Default**: none. The plugin does not bind a key, but you can open the list from the command palette.
+
+### `open`
+
+The command that opens a URL, such as `"open -a Firefox"`.
+
+**Default**: the first of these commands that the plugin finds: `open`, `xdg-open`, and `$BROWSER`.
+
+### `copy_cmd`
+
+The command that copies text to the clipboard, such as `"pbcopy"`.
+
+**Default**: the first of these commands that the plugin finds: `pbcopy`, `wl-copy`, `xclip -selection clipboard`, and `xsel --clipboard --input`.
+
+### `fzf_options`
+
+Extra flags for fzf. For example, `"--no-wrap"` stops long URLs from wrapping.
+
+**Default**: none.
+
+### `max_width` and `max_height`
+
+The largest size of the floating pane, as a fraction of the window. A value must be more than 0 and at most 1, or the plugin ignores it. The pane fits its list of URLs and grows up to these limits. A longer list scrolls, and a longer URL wraps.
+
+**Default**: `max_width = 0.6` and `max_height = 0.4`.
+
+### `extra_pattern` and `extra_sub`
+
+Use these two values to find your own kind of text, such as issue names like `ENG-123`. You must set both values:
+
+- `extra_pattern` is a Perl regex (a text pattern) that matches the text. You can set only one pattern.
+- `extra_sub` is the URL that the plugin builds from each match. `$0` is the matched text.
+
+```lua
+extra_pattern = "ENG-\\d+",
+extra_sub = "https://linear.app/your-workspace/issue/$0",
+```
+
+**Default**: none.
 
 ## License
 

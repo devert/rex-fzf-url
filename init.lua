@@ -38,8 +38,14 @@ local function read_scrollback(block_id)
 end
 
 -- The largest popup, as fractions of the window. With more URLs than fit,
--- the list scrolls. A URL wider than the popup wraps.
+-- the list scrolls. A URL wider than the popup wraps. setup can change both.
 local max_width, max_height = 0.6, 0.4
+
+-- Return value if it is a number above 0 and at most 1, else default.
+local function fraction(value, default)
+  if type(value) == "number" and value > 0 and value <= 1 then return value end
+  return default
+end
 
 -- Open a floating pane with bounds [x, y, w, h], as fractions of the window
 -- that holds block_id.
@@ -143,6 +149,8 @@ end
 -- Define the fzf_url action, and bind opts.key to it when it is set.
 function M.setup(opts)
   opts = opts or {}
+  max_width = fraction(opts.max_width, max_width)
+  max_height = fraction(opts.max_height, max_height)
 
   rex.action{
     name = "fzf_url",
