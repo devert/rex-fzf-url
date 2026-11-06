@@ -85,12 +85,10 @@ if [[ -n "$coverage" ]]; then
     LUA_PATH="${html_path%luacov}?.lua;$LUA_PATH" LUA_CPATH="$PWD/lua_modules/lib/lua/5.1/?.so;;" \
       "$lua" -e 'require("luacov.runner").run_report(".luacov-html")'
     cover -silent cover_db >/dev/null 2>&1
-    echo "HTML reports: luacov-html/index.html, cover_db/coverage.html, and kcov/index.html"
-    # xdg-open takes one file at a time.
+    # test/coverage.html has a link to each report, so only one page opens.
+    echo "HTML reports: test/coverage.html"
     opener=$(command -v open || command -v xdg-open)
-    for f in luacov-html/index.html cover_db/coverage.html kcov/index.html; do
-      [[ -n "$opener" ]] && "$opener" "$f"
-    done
+    [[ -n "$opener" ]] && "$opener" test/coverage.html
   else
     echo "For HTML reports, run: test/run.sh --open"
   fi

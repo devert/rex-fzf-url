@@ -64,13 +64,13 @@ To remove the tools, delete `lua_modules/` and `local/`, and run `brew uninstall
 
 ### Make the reports
 
-To run the tests, make the HTML reports, and open them in your browser, run this command:
+To run the tests and make the HTML reports, run this command:
 
 ```sh
 test/run.sh --open
 ```
 
-The script writes these reports:
+The script opens `test/coverage.html` in your browser. It has a link to each report, and each link opens in a new tab. The reports are:
 
 - `luacov-html/index.html` for the Lua code
 - `cover_db/coverage.html` for `bin/extract-urls`
