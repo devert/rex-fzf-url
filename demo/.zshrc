@@ -4,6 +4,8 @@
 
 PROMPT='%F{cyan}~/code/acme-app%f %F{magenta}❯%f '
 unsetopt BEEP
+# Do not save the history of the demo shell into this folder.
+HISTFILE=/dev/null
 
 git() {
     cat <<'EOF'
