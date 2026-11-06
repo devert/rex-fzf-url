@@ -91,17 +91,23 @@ The most text to read from the pane, in bytes. A large scrollback makes the list
 
 **Default**: `512 * 1024` (512 KB). That is about 6,000 lines of 80 characters.
 
-### `extra_pattern` and `extra_sub`
+### `extra_patterns`
 
-Use these two values to find your own kind of text, such as issue names like `ENG-123`. You must set both values:
+A list of your own kinds of text to find in the pane and show as URLs. For example, the plugin can show the issue name `ENG-123` as a link to that issue in Linear. Each item in the list is a table with two values:
 
-- `extra_pattern` is a Perl regex (a text pattern) that matches the text. You can set only one pattern.
-- `extra_sub` is the URL that the plugin builds from each match. `$0` is the matched text.
+- `regex` is a Perl regular expression (a text pattern) that matches the text.
+- `url` is the URL that the plugin builds from each match. In `url`, `$0` is the matched text. `$1` to `$9` are the capture groups, which are the parts of the regex in parentheses.
 
 ```lua
-extra_pattern = "ENG-\\d+",
-extra_sub = "https://linear.app/your-workspace/issue/$0",
+extra_patterns = {
+  { regex = [[ENG-\d+]], url = "https://linear.app/your-workspace/issue/$0" },
+  { regex = [[PR #(\d+)]], url = "https://github.com/your-org/your-repo/pull/$1" },
+},
 ```
+
+The `regex` value must use Perl syntax, such as `\d` for a digit and `\.` for a period. In a Lua string with quotes, you must write each backslash two times (`"ENG-\\d+"`). A Lua long string, such as `[[ENG-\d+]]`, keeps the backslashes as you write them.
+
+If a `regex` is not valid Perl, the plugin finds no URLs and stops with the error from Perl, such as `Unmatched ( in regex`.
 
 **Default**: none.
 

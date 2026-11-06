@@ -237,9 +237,32 @@ local function fail(message)
   error("fzf-url: " .. tostring(message), 0)
 end
 
+-- Turn opts.extra_patterns into REGEX URL argument pairs for
+-- bin/extract-urls.
+local function extra_args(list)
+  local args = {}
+  if list == nil then return args end
+  if type(list) ~= "table" then fail("extra_patterns must be a list") end
+  for i, entry in ipairs(list) do
+    if type(entry) ~= "table" or type(entry.regex) ~= "string" or entry.regex == "" then
+      fail("extra_patterns[" .. i .. "] needs a regex string")
+    end
+    if entry.url ~= nil and type(entry.url) ~= "string" then
+      fail("extra_patterns[" .. i .. "].url must be a string")
+    end
+    table.insert(args, entry.regex)
+    table.insert(args, entry.url or "")
+  end
+  return args
+end
+
 -- Define the fzf_url action, and bind opts.key to it when it is set.
 function M.setup(opts)
   opts = opts or {}
+  local extract_cmd = { "perl", plugin_dir .. "/bin/extract-urls" }
+  for _, arg in ipairs(extra_args(opts.extra_patterns)) do
+    table.insert(extract_cmd, arg)
+  end
   max_width = fraction(opts.max_width, max_width)
   max_height = fraction(opts.max_height, max_height)
   if type(opts.max_scrollback) == "number" and opts.max_scrollback >= 1 then
@@ -257,14 +280,7 @@ function M.setup(opts)
       local text, err = read_scrollback(ctx.block_id, max_scrollback)
       if text == nil then fail(err) end
 
-      local r, exec_err = rex.exec({ "perl", plugin_dir .. "/bin/extract-urls" }, {
-        stdin = text,
-        timeout = 10,
-        env = {
-          FZF_URL_EXTRA_PATTERN = opts.extra_pattern or false,
-          FZF_URL_EXTRA_SUB = opts.extra_sub or false,
-        },
-      })
+      local r, exec_err = rex.exec(extract_cmd, { stdin = text, timeout = 10 })
       if r == nil then fail(exec_err) end
       if not r.ok then fail(r.stderr) end
 
@@ -312,5 +328,6 @@ end
 
 -- For the tests.
 M._read_scrollback = read_scrollback
+M._extra_args = extra_args
 
 return M

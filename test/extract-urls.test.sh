@@ -78,14 +78,40 @@ check "no urls yields empty output" \
   "nothing to see here" \
   ""
 
-# Extra-pattern passthrough
-got=$(printf 'ticket JIRA-1234 done\n' | FZF_URL_EXTRA_PATTERN='JIRA-\d+' FZF_URL_EXTRA_SUB='https://jira.example.com/browse/$0' perl "$DIR/bin/extract-urls")
-if [[ "$got" == "https://jira.example.com/browse/JIRA-1234" ]]; then
-  pass=$((pass + 1))
-else
-  fail=$((fail + 1))
-  printf 'FAIL extra pattern\n  got: %s\n' "$got"
-fi
+# Extra patterns, passed as REGEX URL argument pairs.
+check_extra() {
+  # check_extra <name> <input> <expected> [REGEX URL ...]
+  local name=$1 input=$2 expected=$3 got
+  shift 3
+  got=$(printf '%s\n' "$input" | perl "$DIR/bin/extract-urls" "$@" 2>&1)
+  if [[ "$got" == "$expected" ]]; then
+    pass=$((pass + 1))
+  else
+    fail=$((fail + 1))
+    printf 'FAIL %s\n  expected: %s\n  got:      %s\n' "$name" "$expected" "$got"
+  fi
+}
+
+check_extra "one extra pattern" \
+  "ticket JIRA-1234 done" \
+  "https://jira.example.com/browse/JIRA-1234" \
+  'JIRA-\d+' 'https://jira.example.com/browse/$0'
+
+check_extra "two extra patterns, in list order per line" \
+  $'fix ENG-7 and PR #42\nthen ENG-8' \
+  $'https://linear.app/x/issue/ENG-7\nhttps://github.com/o/r/pull/42\nhttps://linear.app/x/issue/ENG-8' \
+  'ENG-\d+' 'https://linear.app/x/issue/$0' \
+  '#(\d+)' 'https://github.com/o/r/pull/$1'
+
+check_extra "empty url emits the match" \
+  "id abc-123" \
+  "abc-123" \
+  'abc-\d+' ''
+
+check_extra "odd argument count fails" \
+  "x" \
+  "extract-urls: extra patterns need REGEX URL pairs" \
+  'only-a-regex'
 
 printf '%d passed, %d failed\n' "$pass" "$fail"
 [[ $fail -eq 0 ]]
