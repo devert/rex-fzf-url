@@ -61,7 +61,7 @@ The key that opens the list, such as `"ctrl+space>u"`.
 
 **Default**: none. The plugin does not bind a key, but you can open the list from the command palette.
 
-### `open`
+### `open_cmd`
 
 The command that opens a URL, such as `"open -a Firefox"`.
 

@@ -6,7 +6,7 @@
 # Must stay compatible with macOS /bin/bash 3.2.
 #
 # Environment, set by init.lua from the setup() options:
-#   FZF_URL_OPENER       command that opens a URL (default: open or xdg-open)
+#   FZF_URL_OPEN_CMD     command that opens a URL (default: open or xdg-open)
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
@@ -115,7 +115,7 @@ get_copy_cmd() {
 # The pane closes when this script exits, so openers other than macOS
 # `open` are detached with nohup to outlive it.
 open_url() {
-    if [[ -n "${FZF_URL_OPENER:-}" ]]; then nohup $FZF_URL_OPENER "$1" >/dev/null 2>&1 &
+    if [[ -n "${FZF_URL_OPEN_CMD:-}" ]]; then nohup $FZF_URL_OPEN_CMD "$1" >/dev/null 2>&1 &
     elif command -v open >/dev/null 2>&1; then open "$1"
     elif command -v xdg-open >/dev/null 2>&1; then nohup xdg-open "$1" >/dev/null 2>&1 &
     elif [[ -n "${BROWSER:-}" ]]; then nohup "$BROWSER" "$1" >/dev/null 2>&1 &

@@ -287,7 +287,7 @@ function M.setup(opts)
       local bounds, size = picker_bounds(where, urls)
       local _, layer_err = open_popup(where, bounds, size, {
         "env",
-        "FZF_URL_OPENER=" .. (opts.open or ""),
+        "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
         "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
         "FZF_URL_FZF_OPTIONS=" .. (opts.fzf_options or ""),
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
