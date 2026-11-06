@@ -9,7 +9,7 @@ DIR="$(cd "$(dirname "$0")/.." && pwd)"
 check() {
   local name=$1 input=$2 expected=$3
   shift 3
-  check_eq "$name" "$expected" "$(printf '%s\n' "$input" | perl "$DIR/bin/extract-urls" "$@" 2>&1)"
+  check_eq "$name" "$expected" "$(printf '%s\n' "$input" | perl "$DIR/bin/extract-urls.pl" "$@" 2>&1)"
 }
 
 check "plain https" \
@@ -129,7 +129,7 @@ check "odd argument count fails" \
   "extract-urls: extra patterns need REGEX URL pairs" \
   'only-a-regex'
 
-printf 'x\n' | perl "$DIR/bin/extract-urls" '(' 'u' >/dev/null 2>&1
+printf 'x\n' | perl "$DIR/bin/extract-urls.pl" '(' 'u' >/dev/null 2>&1
 check_eq "an invalid regex fails" "yes" "$([[ $? -ne 0 ]] && echo yes || echo no)"
 
 finish

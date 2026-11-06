@@ -403,7 +403,7 @@ H.raises("extract exits with an error", "fzf-url: bad regex", def.run, { block_i
 def, log = action{ extra_patterns = { { regex = "ENG-\\d+", url = "u/$0" } } }
 def.run({ block_id = "block:1" }, {})
 H.ok("extract command has the extra patterns", log.exec[1] == "perl"
-  and log.exec[2]:match("/bin/extract%-urls$") and log.exec[3] == "ENG-\\d+" and log.exec[4] == "u/$0"
+  and log.exec[2]:match("/bin/extract%-urls%.pl$") and log.exec[3] == "ENG-\\d+" and log.exec[4] == "u/$0"
   and #log.exec == 4)
 H.ok("extract gets the scrollback", log.exec_opts.stdin == "scrollback" and log.exec_opts.timeout == 10)
 

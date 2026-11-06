@@ -238,7 +238,7 @@ local function fail(message)
 end
 
 -- Turn opts.extra_patterns into REGEX URL argument pairs for
--- bin/extract-urls.
+-- bin/extract-urls.pl.
 local function extra_args(list)
   local args = {}
   if list == nil then return args end
@@ -259,7 +259,7 @@ end
 -- Define the fzf_url action, and bind opts.key to it when it is set.
 function M.setup(opts)
   opts = opts or {}
-  local extract_cmd = { "perl", plugin_dir .. "/bin/extract-urls" }
+  local extract_cmd = { "perl", plugin_dir .. "/bin/extract-urls.pl" }
   for _, arg in ipairs(extra_args(opts.extra_patterns)) do
     table.insert(extract_cmd, arg)
   end

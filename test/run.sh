@@ -4,7 +4,7 @@
 #
 #   test/run.sh             run the tests
 #   test/run.sh --coverage  also write coverage reports, with luacov for the
-#                           Lua code, Devel::Cover for bin/extract-urls, and
+#                           Lua code, Devel::Cover for bin/extract-urls.pl, and
 #                           kcov for the bash scripts
 #   test/run.sh --open      the same as --coverage, then also write the HTML
 #                           reports and open them in the browser

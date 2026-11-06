@@ -32,7 +32,7 @@ Each test file tests one source file:
 - `init.test.lua` tests `init.lua`.
 - `popup-size.test.lua` tests `lib/popup-size.lua`.
 - `measure.test.lua` tests `bin/measure.lua`.
-- `extract-urls.test.sh` tests `bin/extract-urls`.
+- `extract-urls.test.sh` tests `bin/extract-urls.pl`.
 - `picker.test.sh` tests `bin/picker.sh`.
 - `message.test.sh` tests `bin/message.sh`.
 
@@ -40,7 +40,7 @@ Each test file tests one source file:
 
 ## Coverage
 
-Coverage shows which lines of code the tests ran. luacov measures `init.lua`, `lib/popup-size.lua`, and `bin/measure.lua`. Devel::Cover measures `bin/extract-urls`. kcov measures `bin/picker.sh` and `bin/message.sh`.
+Coverage shows which lines of code the tests ran. luacov measures `init.lua`, `lib/popup-size.lua`, and `bin/measure.lua`. Devel::Cover measures `bin/extract-urls.pl`. kcov measures `bin/picker.sh` and `bin/message.sh`.
 
 ### Install the coverage tools
 
@@ -65,7 +65,7 @@ test/run.sh --open
 The script opens `test/coverage.html` in your browser. It has a link to each report, and each link opens in a new tab. The reports are:
 
 - `luacov-html/index.html` for the Lua code
-- `cover_db/coverage.html` for `bin/extract-urls`
+- `cover_db/coverage.html` for `bin/extract-urls.pl`
 - `kcov/index.html` for the bash scripts
 
 To get only the summaries in the terminal, run this command:
