@@ -8,17 +8,17 @@ The plugin finds the URLs in the focused pane, including the text that scrolled 
 
 Press the key that you set in the install steps. Then use these keys in the list:
 
-- **Enter** opens the selected URL.
-- **Ctrl+Y** copies the selected URL to the clipboard.
-- **Tab** selects more than one URL.
+- `Enter` opens the selected URL.
+- `Ctrl+Y` copies the selected URL to the clipboard.
+- `Tab` selects more than one URL.
 
 You can also open the list from the Rex command palette. Search for "Find URLs in Pane".
 
 ## Requirements
 
 - [Rex](https://www.superlogical.com/rex)
-- [`fzf`](https://github.com/junegunn/fzf), in the `PATH` of your login shell (the shell that starts in new panes)
-- [`perl`](https://www.perl.org) and [`bash`](https://www.gnu.org/software/bash/) (macOS includes both)
+- [fzf](https://github.com/junegunn/fzf), in the `PATH` of your login shell (the shell that starts in new panes)
+- [perl](https://www.perl.org) and [bash](https://www.gnu.org/software/bash/) (macOS includes both)
 
 ## Install
 
