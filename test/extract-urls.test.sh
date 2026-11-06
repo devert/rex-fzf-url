@@ -28,12 +28,20 @@ check "git ssh remote rewritten" \
   "origin  git@github.com:wfxr/xre.git (fetch)" \
   "https://github.com/wfxr/xre.git"
 
+check "ssh:// git remote rewritten" \
+  "url = ssh://git@github.com/wfxr/xre.git" \
+  "https://github.com/wfxr/xre.git"
+
 check "git remote in parentheses drops the closing paren" \
   "clone (git@github.com:devert/rex-fzf-url.git) now" \
   "https://github.com/devert/rex-fzf-url.git"
 
 check "www path in parentheses drops the closing paren" \
   "(see www.example.com/docs)" \
+  "http://www.example.com/docs"
+
+check "www path drops a trailing period" \
+  "see www.example.com/docs." \
   "http://www.example.com/docs"
 
 check "bare www prefixed" \
@@ -48,9 +56,17 @@ check "ipv4 with port and path" \
   "listening on 127.0.0.1:8080/health now" \
   "http://127.0.0.1:8080/health"
 
-check "quoted user/repo shorthand" \
+check "ipv4 alone, and a trailing comma dropped" \
+  "hosts 10.0.0.1:80/x, 10.0.0.2 up" \
+  $'http://10.0.0.1:80/x\nhttp://10.0.0.2'
+
+check "single-quoted user/repo shorthand" \
   "plugin 'junegunn/fzf' is installed" \
   "https://github.com/junegunn/fzf"
+
+check "double-quoted user/repo shorthand" \
+  'use "junegunn/fzf.vim" here' \
+  "https://github.com/junegunn/fzf.vim"
 
 check "dedup keeps first occurrence" \
   $'https://example.com\nhttps://example.com' \
@@ -60,9 +76,17 @@ check "ansi colors stripped" \
   $'\e[31mhttps://red.example.com\e[0m' \
   "https://red.example.com"
 
+check "private mode CSI stripped" \
+  $'\e[?25lhttps://a.example.com\e[?25h' \
+  "https://a.example.com"
+
 check "osc8 hyperlink wrapper stripped" \
   $'\e]8;;https://osc.example.com\e\\link text\e]8;;\e\\ and https://plain.example.com' \
   $'https://osc.example.com\nhttps://plain.example.com'
+
+check "osc title dropped with the URL in it" \
+  $'\e]0;title https://title.example.com\a then https://x.example.com' \
+  "https://x.example.com"
 
 check "multiple urls one line, in order" \
   "a https://one.example.com b https://two.example.com c" \
@@ -90,9 +114,22 @@ check "empty url emits the match" \
   "abc-123" \
   'abc-\d+' ''
 
+check "a missing group gives an empty string" \
+  "ENG-5" \
+  "u/5/" \
+  'ENG-(\d+)' 'u/$1/$2'
+
+check "an extra URL that a built-in pattern found counts once" \
+  "ENG-1 https://linear.app/x/issue/ENG-1" \
+  "https://linear.app/x/issue/ENG-1" \
+  'ENG-\d+' 'https://linear.app/x/issue/$0'
+
 check "odd argument count fails" \
   "x" \
   "extract-urls: extra patterns need REGEX URL pairs" \
   'only-a-regex'
+
+printf 'x\n' | perl "$DIR/bin/extract-urls" '(' 'u' >/dev/null 2>&1
+check_eq "an invalid regex fails" "yes" "$([[ $? -ne 0 ]] && echo yes || echo no)"
 
 finish
