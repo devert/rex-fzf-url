@@ -21,6 +21,8 @@ now() { perl -MTime::HiRes=time -e 'printf "%.3f", time'; }
 # a fresh log, and a fake rex. Sets $out, $status, and $secs, the time it
 # took. An alarm stops message.sh after 5 seconds, so that a script that
 # never times out fails the checks instead of hanging the test.
+# Under kcov (test/run.sh --coverage), BASH_ENV turns on tracing in each
+# bash, so keep it.
 run() {
   local vars=()
   while [[ $# -gt 0 && "$1" != "--" ]]; do vars+=("$1"); shift; done
@@ -28,7 +30,7 @@ run() {
   LOG=$TMP/log.$RANDOM
   local start
   start=$(now)
-  out=$(env -i PATH=/bin:/usr/bin LOG="$LOG" REX_BIN_DIR="$FAKE" ${vars[@]+"${vars[@]}"} \
+  out=$(env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} PATH=/bin:/usr/bin LOG="$LOG" REX_BIN_DIR="$FAKE" ${vars[@]+"${vars[@]}"} \
     perl -e 'alarm 5; exec @ARGV' /bin/bash "$DIR/bin/message.sh" "$@" <"$input")
   status=$?
   secs=$(perl -e "printf '%.2f', $(now) - $start")

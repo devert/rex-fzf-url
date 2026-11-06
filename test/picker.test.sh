@@ -40,15 +40,19 @@ for p in sleep rex; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
 # picker <file> [VAR=value ...]: run picker.sh on file, with a fresh log.
 # Sets $status to its exit status, and $err to the lines of its stderr that
 # start with "fzf-url:".
+# Under kcov (test/run.sh --coverage), BASH_ENV turns on tracing in each
+# bash, and bash 3.2 writes the trace to stderr. So keep BASH_ENV, and pass
+# stderr on to kcov after the run.
 picker() {
   local file=$1
   shift
   LOG=$(mktemp -d "$TMP/log.XXXX")
-  env -i HOME="$HOME" PATH="$FAKE:/bin" LOG="$LOG" \
+  env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} HOME="$HOME" PATH="$FAKE:/bin" LOG="$LOG" \
     REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 "$@" \
     /bin/bash "$DIR/bin/picker.sh" "$file" >/dev/null 2>"$TMP/stderr"
   status=$?
   err=$(grep '^fzf-url:' "$TMP/stderr")
+  if [[ -n "${BASH_ENV:-}" ]]; then grep -v '^fzf-url:' "$TMP/stderr" >&2; fi
 }
 
 # run <urls> [VAR=value ...]: run picker.sh on a URL file that holds urls.

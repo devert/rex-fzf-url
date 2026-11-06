@@ -1,0 +1,7 @@
+luacov.stats.out
+luacov.report.out
+luacov-html/
+cover_db/
+lua_modules/
+local/
+kcov/
