@@ -329,5 +329,9 @@ end
 -- For the tests.
 M._read_scrollback = read_scrollback
 M._extra_args = extra_args
+M._locate = locate
+M._popup_bounds = popup_bounds
+M._picker_bounds = picker_bounds
+M._limits = function() return max_width, max_height, max_scrollback end
 
 return M
