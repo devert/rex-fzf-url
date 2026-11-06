@@ -10,7 +10,7 @@
 #                           reports and open them in the browser
 #
 # Coverage needs luacov and luacov-html in lua_modules/, Devel::Cover in
-# local/, and kcov. test/README.md tells how to install them.
+# local/, and kcov. To install them, run test/install-coverage-tools.sh.
 set -u
 
 cd "$(dirname "$0")/.." || exit 1
@@ -29,7 +29,7 @@ lua=$(command -v luajit || command -v lua) || { echo "run.sh: luajit or lua not 
 lua_flags=()
 if [[ -n "$coverage" ]]; then
   if [[ ! -x lua_modules/bin/luacov || ! -x local/bin/cover ]] || ! command -v kcov >/dev/null; then
-    echo "run.sh: coverage tools not found. See test/README.md to install them." >&2
+    echo "run.sh: coverage tools not found. To install them, run: test/install-coverage-tools.sh" >&2
     exit 1
   fi
   rm -rf luacov.stats.out luacov.report.out luacov-html cover_db kcov

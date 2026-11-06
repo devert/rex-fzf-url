@@ -44,21 +44,13 @@ Coverage shows which lines of code the tests ran. luacov measures `init.lua`, `l
 
 ### Install the coverage tools
 
-You install the tools one time. luacov, luacov-html, and Devel::Cover go into `lua_modules/` and `local/` in the repository. Git ignores both folders. kcov comes from Homebrew.
+You install the tools one time. You need Homebrew. Run this command:
 
-1. Install luarocks, cpanminus, and kcov:
+```sh
+test/install-coverage-tools.sh
+```
 
-   ```sh
-   brew install luarocks cpanminus kcov
-   ```
-
-2. From the root of the repository, install luacov, luacov-html, and Devel::Cover:
-
-   ```sh
-   luarocks --lua-version 5.1 --lua-dir "$(brew --prefix luajit)" --tree lua_modules install luacov
-   luarocks --lua-version 5.1 --lua-dir "$(brew --prefix luajit)" --tree lua_modules install luacov-html
-   cpanm -L local --notest Devel::Cover
-   ```
+If luajit, luarocks, cpanminus, or kcov is missing, the script installs it with Homebrew. It installs luacov and luacov-html into `lua_modules/`, and Devel::Cover into `local/`, in the repository. Git ignores both folders. You can run the script again.
 
 To remove the tools, delete `lua_modules/` and `local/`, and run `brew uninstall kcov`.
 
