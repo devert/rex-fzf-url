@@ -2,7 +2,14 @@
 # The git and npm functions print fixed sample output, so every recording
 # shows the same URLs and needs no network or real project.
 
-PROMPT='%F{cyan}~/code/acme-app%f %F{magenta}❯%f '
+# The prompt uses the Monokai Pro colors as 24-bit escapes, so it looks the
+# same with every Rex theme: the folder in orange and the branch in green on
+# one line, and a green arrow on the line below.
+orange=$'%{\e[38;2;252;152;103m%}'
+green=$'%{\e[38;2;169;220;118m%}'
+reset=$'%{\e[0m%}'
+PROMPT="${orange}~/code/acme-app${reset} ${green}fix-login-redirect${reset}"$'\n'"${green}❯${reset} "
+unset orange green reset
 unsetopt BEEP
 # Do not save the history of the demo shell into this folder.
 HISTFILE=/dev/null
@@ -24,16 +31,19 @@ To github.com:acme/acme-app.git
 EOF
 }
 
+# The Vite banner uses the same colors as Vite: the normal terminal colors,
+# so they follow the Rex theme.
 npm() {
-    cat <<'EOF'
+    local g=$'\e[32m' c=$'\e[36m' b=$'\e[1m' d=$'\e[2m' r=$'\e[0m'
+    cat <<EOF
 
 > acme-app@0.4.0 dev
 > vite
 
-  VITE v7.1.3  ready in 312 ms
+  ${g}${b}VITE${r} ${g}v8.3.6${r}  ${d}ready in ${r}${b}312${r}${d} ms${r}
 
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.1.24:5173/
-  ➜  Docs:    https://vite.dev/guide/
+  ${g}➜${r}  ${b}Local${r}:   ${c}http://localhost:${b}5173${r}${c}/${r}
+  ${g}➜${r}  ${b}Network${r}: ${c}http://192.168.1.24:${b}5173${r}${c}/${r}
+  ${g}➜${r}  ${b}Docs${r}:    ${c}https://vite.dev/guide/${r}
 EOF
 }
