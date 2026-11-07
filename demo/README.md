@@ -5,7 +5,7 @@ This folder holds the script that records `docs/demo.gif`, the animation in the 
 ## Requirements
 
 - macOS. The script uses `screencapture` and `osascript`.
-- The Rex app, with this plugin installed and loaded. See the install steps in the main README.
+- The Rex app for macOS, build 1853 or later, with this plugin installed and loaded. See the install steps in the main README. An earlier build does not add padding at the bottom of a floating pane, so the picker in the GIF has the wrong size.
 - `fzf`, `jq`, `ffmpeg`, and `gifski`.
 
 To install the tools with Homebrew, run:
@@ -43,7 +43,7 @@ When the recording stops, the script shows your session again and deletes the de
 
 ## What the demo shows
 
-The demo pane runs `git push` and `npm run dev`, which print five URLs. Then the script opens the URL list, as the key binding does. It moves the selection down and up, types `pull` to filter the list, and copies the pull request URL with Ctrl+Y. At the end, the demo pane runs `pbpaste` to show the copied URL.
+The demo pane runs `git push` and `npm run dev`, which print four URLs. Then the script opens the URL list, as the key binding does. It moves the selection down and up, types `pull` to filter the list, and copies the pull request URL with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the copied URL.
 
 ## Look at the result
 
