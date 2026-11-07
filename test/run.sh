@@ -5,9 +5,10 @@
 #   test/run.sh             run the tests
 #   test/run.sh --coverage  also write coverage reports, with luacov for the
 #                           Lua code, Devel::Cover for bin/extract-urls.pl, and
-#                           kcov for the bash scripts
-#   test/run.sh --open      the same as --coverage, then also write the HTML
-#                           reports and open them in the browser
+#                           kcov for the bash scripts, and print the file://
+#                           URL of the page that links to the HTML reports
+#   test/run.sh --open      the same as --coverage, then also open that page
+#                           in the browser
 #
 # Coverage needs luacov and luacov-html in lua_modules/, Devel::Cover in
 # local/, and kcov. To install them, run test/install-coverage-tools.sh.
@@ -16,11 +17,11 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 
 coverage=
-html=
+open=
 for a in "$@"; do
   case $a in
     --coverage) coverage=1 ;;
-    --open) coverage=1 html=1 ;;
+    --open) coverage=1 open=1 ;;
     *) echo "run.sh: unknown option $a" >&2; exit 1 ;;
   esac
 done
@@ -97,12 +98,11 @@ run_test() {
   esac
 }
 
-# make_reports: write the reports that the coverage summary reads, and with
-# --open, the HTML reports.
+# make_reports: write the reports that the coverage summary reads, and the
+# HTML reports.
 make_reports() {
   luacov || return
   cover -silent cover_db -report json >/dev/null || return
-  [[ -z "$html" ]] && return
   # luacov-html has the same module name as the HTML reporter that comes
   # with luacov, so luarocks installed it under a renamed path. Put that
   # path first. LUA_CPATH finds LuaFileSystem, which luacov-html needs.
@@ -145,13 +145,17 @@ if [[ -n "$coverage" ]]; then
   fi
   perl test/coverage-summary.pl
   echo
-  if [[ -n "$html" ]]; then
-    # test/coverage.html has a link to each report, so only one page opens.
-    printf '%sHTML reports: test/coverage.html%s\n' "$dim" "$reset"
+  # test/coverage.html has a link to each report, so only one page opens.
+  # Print it as a file:// URL, so that the terminal can open it on a click
+  # and rex-fzf-url can find it. Encode the spaces, or the URL ends at the
+  # first one.
+  url="file://${PWD// /%20}/test/coverage.html"
+  printf '%sHTML reports: %s%s\n' "$dim" "$url" "$reset"
+  if [[ -n "$open" ]]; then
     opener=$(command -v open || command -v xdg-open)
-    [[ -n "$opener" ]] && "$opener" test/coverage.html
+    [[ -n "$opener" ]] && "$opener" "$url"
   else
-    printf '%sFor HTML reports, run: test/run.sh --open%s\n' "$dim" "$reset"
+    printf '%sTo open them in the browser, run: test/run.sh --open%s\n' "$dim" "$reset"
   fi
 fi
 

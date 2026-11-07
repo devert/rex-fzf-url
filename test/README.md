@@ -68,18 +68,18 @@ To remove the tools, do these steps:
 
 ### Make the reports
 
-To run the tests and make the HTML reports, run this command:
-
-```sh
-test/run.sh --open
-```
-
-The script opens `test/coverage.html` in your browser. That page has a link to each report. Each link opens in a new tab.
-
-To get only the summaries in the terminal, run this command:
+To run the tests and make the reports, run this command:
 
 ```sh
 test/run.sh --coverage
+```
+
+The script shows a summary of test coverage in the terminal. It also prints the `file://` URL of `test/coverage.html`, a page with a link to each HTML report.
+
+To do the same and also open that page in your browser, run this command:
+
+```sh
+test/run.sh --open
 ```
 
 If the tools are not installed, the script stops with an error. Each coverage run deletes the reports from the previous run.
