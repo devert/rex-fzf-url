@@ -3,27 +3,36 @@
 --
 -- Rex places a floating pane with bounds that are fractions of the window,
 -- but it doesn't report the size of the window in cells. A floating pane
--- that is a fraction f of a window W cells wide is round(f * W) - 2 cells
--- wide, as its border takes 2 cells. The same goes for the height. So the
--- plugin keeps a range [low, high) of possible window sizes for each
--- direction, and picks bounds that fit every size in the range.
+-- that is a fraction f of a window W cells wide is floor(f * W - inset)
+-- cells wide, as its border and padding take about inset cells. The same
+-- goes for the height. So the plugin keeps a range [low, high) of possible
+-- window sizes for each direction, and picks bounds that fit every size in
+-- the range.
+--
+-- The numbers below come from Rex for macOS (app 0.1.0, build 1853), at two
+-- window sizes: 153x49 and 125x38 cells in a full tiled pane. The inset
+-- measured 2.03 to 2.16 cells. W is in the cells that floating panes use,
+-- and it is about 3 cells more than a full tiled pane gets.
 
 local M = {}
 
+-- The smallest and largest inset of a floating pane, with a margin.
+M.inset_low, M.inset_high = 1.95, 2.25
+
 -- Return the range of window sizes that a tiled pane of n cells allows, when
 -- the pane is a fraction f of the window. A pane that spans the window has
--- its size. Other panes lose 1 or more cells to padding and to the dividers
--- between panes, and at most most cells. Measurements in Rex for macOS
--- found at most 2 rows and 4 columns.
-function M.tiled_range(n, f, most)
-  if f >= 0.999 then return n - 0.5, n + 0.5 end
-  return (n + 1) / f, (n + most) / f
+-- 2.36 to 3.19 cells less than W. Other panes lose 1.7 to 2.8 cells of
+-- f * W to padding and to the dividers between panes. Both ranges have a
+-- margin.
+function M.tiled_range(n, f)
+  if f >= 0.999 then return n + 2.2, n + 3.4 end
+  return (n + 1.5) / f, (n + 4) / f
 end
 
 -- Return the range of window sizes that a floating pane of n cells allows,
 -- when the pane is a fraction f of the window.
 function M.floating_range(n, f)
-  return (n + 1.5) / f, (n + 2.5) / f
+  return (n + M.inset_low) / f, (n + 1 + M.inset_high) / f
 end
 
 -- Return the overlap of two ranges, or nil when they don't overlap.
@@ -35,13 +44,13 @@ end
 
 -- Return the fraction of the window for a floating pane of n cells. Use the
 -- middle of the fractions that give n cells for every window size in
--- [low, high). When no fraction does that, use the smallest one that gives
--- at least n cells. A cell too many is better than a cell too few, as fzf
--- would then hide a URL.
+-- [low, high) and every inset. When no fraction does that, use the smallest
+-- one that gives at least n cells. A cell too many is better than a cell
+-- too few, as fzf would then hide a URL.
 local function fit(n, low, high)
-  local small, large = (n + 1.5) / low, (n + 2.5) / high
+  local small, large = (n + M.inset_high) / low, (n + 1 + M.inset_low) / high
   if small < large then return (small + large) / 2 end
-  return (n + 1.6) / low
+  return (n + M.inset_high + 0.02) / low
 end
 
 -- Return the fraction of the window for a floating pane of n cells, and the
@@ -55,7 +64,7 @@ function M.fraction(n, low, high, max)
     f = fit(n, low, high)
   end
   f = math.min(f, max)
-  return f, math.max(1, math.floor(f * low + 0.5) - 2)
+  return f, math.max(1, math.floor(f * low - M.inset_high))
 end
 
 -- Return a short hash of a string, to use in a cache key.
