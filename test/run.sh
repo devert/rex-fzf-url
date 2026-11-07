@@ -40,11 +40,48 @@ if [[ -n "$coverage" ]]; then
   export PERL5OPT="-MDevel::Cover=-silent,1,-db,$PWD/cover_db"
 fi
 
-failed=0
-for t in test/*.test.lua test/*.test.sh; do
-  printf '%s: ' "$t"
-  case $t in
-    *.lua) "$lua" "${lua_flags[@]+"${lua_flags[@]}"}" "$t" ;;
+# Colors show only on a terminal, and not when NO_COLOR is set.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  bold=$'\033[1m' dim=$'\033[90m' green=$'\033[32m' red=$'\033[31m' reset=$'\033[0m'
+else
+  bold= dim= green= red= reset=
+fi
+
+# spin <label> <command> [arg ...]: run the command, and set $out to its
+# output and $status to its exit status. On a terminal, show a spinner and
+# the label while the command runs.
+spin_file=$(mktemp)
+spin_pid=
+trap 'rm -f "$spin_file"' EXIT
+trap '[[ -n "$spin_pid" ]] && kill "$spin_pid" 2>/dev/null; [[ -t 1 ]] && printf "\r\033[K\033[?25h"; exit 130' INT TERM
+frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+spin() {
+  local label=$1 i=0
+  shift
+  if [[ ! -t 1 ]]; then
+    out=$("$@" 2>&1)
+    status=$?
+    return
+  fi
+  "$@" >"$spin_file" 2>&1 &
+  spin_pid=$!
+  printf '\033[?25l'
+  while kill -0 "$spin_pid" 2>/dev/null; do
+    printf '\r  %s%s%s %s' "$green" "${frames[i % 10]}" "$reset" "$label"
+    i=$((i + 1))
+    sleep 0.08
+  done
+  wait "$spin_pid"
+  status=$?
+  spin_pid=
+  printf '\r\033[K\033[?25h'
+  out=$(cat "$spin_file")
+}
+
+# run_test <file>: run one test file.
+run_test() {
+  case $1 in
+    *.lua) "$lua" "${lua_flags[@]+"${lua_flags[@]}"}" "$1" ;;
     *.sh)
       if [[ -n "$coverage" ]]; then
         # kcov runs the test with /bin/bash, and traces every bash script
@@ -53,44 +90,68 @@ for t in test/*.test.lua test/*.test.sh; do
         # first line of the fzf call in picker.sh. That line is not counted.
         # kcov prints the trace lines that it can't read to stderr, so drop
         # them. The test results go to stdout.
-        kcov --include-path="$PWD/bin" --exclude-line='selection=$(printf' kcov "$t" 2>/dev/null
+        kcov --include-path="$PWD/bin" --exclude-line='selection=$(printf' kcov "$1" 2>/dev/null
       else
-        /bin/bash "$t"
+        /bin/bash "$1"
       fi ;;
-  esac || failed=1
+  esac
+}
+
+# make_reports: write the reports that the coverage summary reads, and with
+# --open, the HTML reports.
+make_reports() {
+  luacov || return
+  cover -silent cover_db -report json >/dev/null || return
+  [[ -z "$html" ]] && return
+  # luacov-html has the same module name as the HTML reporter that comes
+  # with luacov, so luarocks installed it under a renamed path. Put that
+  # path first. LUA_CPATH finds LuaFileSystem, which luacov-html needs.
+  local html_path
+  html_path=$(echo "$PWD"/lua_modules/share/lua/5.1/luacov_html_*-luacov)
+  LUA_PATH="${html_path%luacov}?.lua;$LUA_PATH" LUA_CPATH="$PWD/lua_modules/lib/lua/5.1/?.so;;" \
+    "$lua" -e 'require("luacov.runner").run_report(".luacov-html")' || return
+  cover -silent cover_db >/dev/null
+}
+
+printf '%sTests%s\n' "$bold" "$reset"
+failed=0
+for t in test/*.test.lua test/*.test.sh; do
+  spin "${t#test/}" run_test "$t"
+  # The last line of the output holds the counts. The lines before it tell
+  # about the checks that failed.
+  counts=${out##*$'\n'}
+  details=
+  [[ "$out" == *$'\n'* ]] && details=${out%$'\n'*}
+  if [[ ! "$counts" =~ ^[0-9]+\ passed,\ [0-9]+\ failed$ ]]; then
+    counts="did not finish"
+    details=$out
+  fi
+  if [[ $status -eq 0 ]]; then
+    printf '  %s✓%s %-24s %4s passed\n' "$green" "$reset" "${t#test/}" "${counts%% *}"
+  else
+    failed=1
+    printf '  %s✗ %-24s %s%s\n' "$red" "${t#test/}" "$counts" "$reset"
+    [[ -n "$details" ]] && printf '%s\n' "$details" | sed 's/^/      /'
+  fi
 done
 
 if [[ -n "$coverage" ]]; then
   unset PERL5OPT
   echo
-  luacov && sed -n '/^Summary/,$p' luacov.report.out
-  echo
-  cover -silent cover_db -report text 2>/dev/null | sed -n '/^File/,/^Total/p'
-  echo
-  perl -MJSON::PP -0777 -ne '
-    my $d = decode_json($_);
-    printf "%-20s %5s %7s %8s\n", "File", "Hits", "Lines", "Coverage";
-    for my $f (sort { $a->{file} cmp $b->{file} } @{ $d->{files} }) {
-      (my $name = $f->{file}) =~ s{.*/(bin/)}{$1};
-      printf "%-20s %5d %7d %7s%%\n", $name, $f->{covered_lines}, $f->{total_lines}, $f->{percent_covered};
-    }
-    printf "%-20s %5d %7d %7s%%\n", "Total", $d->{covered_lines}, $d->{total_lines}, $d->{percent_covered};
-  ' kcov/kcov-merged/coverage.json
+  spin "Making the coverage reports" make_reports
+  if [[ $status -ne 0 ]]; then
+    printf '%srun.sh: the coverage reports failed%s\n%s\n' "$red" "$reset" "$out" >&2
+    exit 1
+  fi
+  perl test/coverage-summary.pl
   echo
   if [[ -n "$html" ]]; then
-    # luacov-html has the same module name as the HTML reporter that comes
-    # with luacov, so luarocks installed it under a renamed path. Put that
-    # path first. LUA_CPATH finds LuaFileSystem, which luacov-html needs.
-    html_path=$(echo "$PWD"/lua_modules/share/lua/5.1/luacov_html_*-luacov)
-    LUA_PATH="${html_path%luacov}?.lua;$LUA_PATH" LUA_CPATH="$PWD/lua_modules/lib/lua/5.1/?.so;;" \
-      "$lua" -e 'require("luacov.runner").run_report(".luacov-html")'
-    cover -silent cover_db >/dev/null 2>&1
     # test/coverage.html has a link to each report, so only one page opens.
-    echo "HTML reports: test/coverage.html"
+    printf '%sHTML reports: test/coverage.html%s\n' "$dim" "$reset"
     opener=$(command -v open || command -v xdg-open)
     [[ -n "$opener" ]] && "$opener" test/coverage.html
   else
-    echo "For HTML reports, run: test/run.sh --open"
+    printf '%sFor HTML reports, run: test/run.sh --open%s\n' "$dim" "$reset"
   fi
 fi
 
