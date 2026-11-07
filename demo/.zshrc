@@ -11,6 +11,9 @@ reset=$'%{\e[0m%}'
 PROMPT="${orange}~/code/acme-app${reset} ${green}fix-login-redirect${reset}"$'\n'"${green}❯${reset} "
 unset orange green reset
 unsetopt BEEP
+# The copied URLs end with no newline. Do not show the % mark that zsh puts
+# after such output.
+PROMPT_EOL_MARK=''
 # Do not save the history of the demo shell into this folder.
 HISTFILE=/dev/null
 

@@ -10,7 +10,7 @@
 # Rex window with screencapture while it types commands and uses the plugin.
 # Then it shows your session again and converts the video to a GIF.
 #
-# Do not use the keyboard or mouse while it records (about 25 seconds).
+# Do not use the keyboard or mouse while it records (about 35 seconds).
 # The first run asks for Screen Recording permission for Rex.
 # The demo copies a URL, so the script saves your clipboard text and puts it
 # back at the end.
@@ -122,6 +122,13 @@ rec_pid=$!
 start=$(now)
 sleep 1.5
 
+# Open the plugin while the pane has no URLs. It shows "No URLs found." in a
+# small pane that closes after one second.
+rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
+wait_for 5 has_popup || die "the message did not open"
+wait_for 5 no_popup || die "the message did not close"
+sleep 0.8
+
 type_text "$pane" "git push -u origin fix-login-redirect"
 sleep 0.3
 key "$pane" enter
@@ -136,14 +143,28 @@ rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
 wait_for 5 has_popup || die "the picker did not open"
 picker=$(popup)
 sleep 1.2
-key "$picker" down
-sleep 0.5
-key "$picker" down
+# The selection starts on the last URL, at the bottom of the list, so move
+# up first.
+key "$picker" up
 sleep 0.5
 key "$picker" up
+sleep 0.5
+key "$picker" down
 sleep 0.8
+# Mark two URLs with Tab, and copy both of them with Ctrl+Y. Clearing the
+# filter moves the selection to the last URL, two rows below localhost.
 type_text "$picker" "pull"
-sleep 1.2
+sleep 0.8
+key "$picker" tab
+sleep 0.8
+key "$picker" ctrl+u
+sleep 0.8
+key "$picker" up
+sleep 0.5
+key "$picker" up
+sleep 0.5
+key "$picker" tab
+sleep 1.5
 key "$picker" ctrl+y
 wait_for 5 no_popup || die "the picker did not close"
 sleep 0.8

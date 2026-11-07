@@ -37,13 +37,13 @@ rex actions | grep fzf_url
    ```
 
 3. If macOS asks for Screen Recording permission for Rex, give the permission. If macOS tells you to quit and open Rex again, do that, and then run the script again.
-4. Do not use the keyboard or the mouse until the script prints `Wrote .../docs/demo.gif`. The recording takes about 25 seconds, and the conversion to a GIF takes some more seconds.
+4. Do not use the keyboard or the mouse until the script prints `Wrote .../docs/demo.gif`. The recording takes about 35 seconds, and the conversion to a GIF takes some more seconds.
 
 When the recording stops, the script shows your session again and deletes the demo session. It also puts back the text that was in your clipboard before the demo. It does not keep images or files that were in the clipboard. If the script fails, it also does these steps.
 
 ## What the demo shows
 
-The demo pane runs `git push` and `npm run dev`, which print four URLs. Then the script opens the URL list, as the key binding does. It moves the selection down and up, types `pull` to filter the list, and copies the pull request URL with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the copied URL.
+First, the script opens the plugin while the demo pane has no URLs, as the key binding does. The plugin shows `No URLs found.` in a small pane that closes after one second. Then the demo pane runs `git push` and `npm run dev`, which print four URLs. The script opens the plugin again, and it shows the URL list. It moves the selection up and down. Then it types `pull` to filter the list, and marks the pull request URL with `Tab`. It clears the filter with `Ctrl+U`, moves up to the local Vite URL, and marks it with `Tab`. The list then shows both marked URLs. Then it copies both URLs with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the two copied URLs, one on each line.
 
 ## Look at the result
 
