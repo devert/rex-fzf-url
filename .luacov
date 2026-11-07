@@ -1,0 +1,9 @@
+-- luacov configuration for test/run.sh --coverage. Report only the plugin
+-- code, not the tests. The tests load the code as test/../init.lua, so match
+-- the end of the name only.
+return {
+  include = { "/init$", "lib/popup%-size$", "bin/measure$" },
+  -- bin/measure.lua loads lib/popup-size.lua as bin/../lib/popup-size.lua,
+  -- which luacov would report as a second file.
+  exclude = { "bin/%.%./" },
+}

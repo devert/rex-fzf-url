@@ -15,15 +15,17 @@
 #   IP   v4 address, optional port and path   -> http://1.2.3.4...
 #   GH   quoted 'user/repo' shorthand         -> https://github.com/user/repo
 #
-# Environment:
-#   FZF_URL_EXTRA_PATTERN  additional perl regex to extract
-#   FZF_URL_EXTRA_SUB      its substitution; $0-$9 refer to capture groups
+# Arguments: extra patterns as pairs, REGEX URL [REGEX URL ...].
+# REGEX is a perl regex. URL is the URL to build from each match, where
+# $0-$9 refer to capture groups. An empty URL emits the matched text.
 use strict;
 use warnings;
 
-my $extra     = $ENV{FZF_URL_EXTRA_PATTERN};
-my $extra_sub = $ENV{FZF_URL_EXTRA_SUB};
-$extra = length($extra // '') ? qr/$extra/ : undef;
+die "extract-urls: extra patterns need REGEX URL pairs\n" if @ARGV % 2;
+my @extras;
+while (my ($regex, $url) = splice(@ARGV, 0, 2)) {
+    push @extras, [qr/$regex/, $url];
+}
 
 my %seen;
 sub emit { my ($url) = @_; print "$url\n" unless $seen{$url}++ }
@@ -50,16 +52,18 @@ while (my $line = <STDIN>) {
         elsif (defined $+{git_host}) { emit(trim("https://$+{git_host}/$+{git_path}")) }
         elsif (defined $+{www})      { emit(trim("http://$+{www}")) }
         elsif (defined $+{ip})       { emit(trim("http://$+{ip}")) }
-        elsif (defined $+{gh})       { emit("https://github.com/$+{gh}") }
+        else                         { emit("https://github.com/$+{gh}") }  # each match sets one group
     }
 
-    next unless $extra;
-    while ($line =~ /$extra/g) {
-        if (length($extra_sub // '')) {
-            my @g = ($&, $1, $2, $3, $4, $5, $6, $7, $8, $9);
-            (my $out = $extra_sub) =~ s{\$(\d)}{ defined $g[$1] ? $g[$1] : '' }ge;
-            emit($out);
+    for my $extra (@extras) {
+        my ($re, $url) = @$extra;
+        while ($line =~ /$re/g) {
+            if (length $url) {
+                my @g = ($&, $1, $2, $3, $4, $5, $6, $7, $8, $9);
+                (my $out = $url) =~ s{\$(\d)}{ defined $g[$1] ? $g[$1] : '' }ge;
+                emit($out);
+            }
+            else { emit($&) }
         }
-        else { emit($&) }
     }
 }

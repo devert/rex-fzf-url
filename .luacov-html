@@ -1,0 +1,10 @@
+-- luacov configuration for the HTML report that test/run.sh --open writes
+-- with the luacov-html reporter. It is the same as .luacov, but writes the
+-- report to the luacov-html folder.
+local config = dofile(".luacov")
+config.reporter = "html"
+config.html = { outputDirectory = "luacov-html", projectName = "rex-fzf-url" }
+-- Every luacov reporter empties reportfile when it starts, and luacov-html
+-- writes nothing to it. Keep it away from the text report.
+config.reportfile = "/dev/null"
+return config

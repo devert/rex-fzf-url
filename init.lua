@@ -3,7 +3,7 @@
 -- Install by cloning this repository into ~/.config/rex/plugins/rex-fzf-url,
 -- then add this to ~/.config/rex/init.lua:
 --
---   require("plugins.rex-fzf-url").setup{ key = "ctrl+space>u" }
+--   require("plugins.rex-fzf-url").setup({ key = "ctrl+space>u" })
 --
 -- See README.md for every option.
 
@@ -153,8 +153,8 @@ local function locate(block_id)
     if want ~= nil and type(rect) == "table" and rect[3] > 0 and rect[4] > 0 then
       if leaf.block_id == block_id then where.cell = s end
       key[#key + 1] = string.format("%s %.4f %.4f %d %d", leaf.block_id, rect[3], rect[4], want.columns, want.rows)
-      local cl, ch = popup_size.tiled_range(want.columns, rect[3], 4)
-      local rl, rh = popup_size.tiled_range(want.rows, rect[4], 3)
+      local cl, ch = popup_size.tiled_range(want.columns, rect[3])
+      local rl, rh = popup_size.tiled_range(want.rows, rect[4])
       cl, ch = popup_size.intersect(where.cols[1], where.cols[2], cl, ch)
       rl, rh = popup_size.intersect(where.rows[1], where.rows[2], rl, rh)
       if cl ~= nil then where.cols = { cl, ch } end
@@ -214,21 +214,20 @@ end
 
 -- Return bounds for the picker, sized to its content like
 -- junegunn/tmux-fzf-url: the longest line + 6 columns, and one row per URL
--- plus 5 rows for the prompt, the help text, two border lines, and the
--- bottom padding row.
+-- plus 4 rows for the prompt, the help text, and two border lines. Rex pads
+-- the bottom of a floating pane, so the picker needs no padding row.
 local function picker_bounds(where, urls)
   local width = #"Enter: Open URL / CTRL-Y: Copy to clipboard"
   for _, url in ipairs(urls) do
     if #url > width then width = #url end
   end
-  return popup_bounds(where, width + 6, #urls + 5)
+  return popup_bounds(where, width + 6, #urls + 4)
 end
 
--- Show a one-line message, with one empty row below it like the picker, in a
--- small floating pane sized to the message. The pane closes after one
--- second, or when you press a key.
+-- Show a one-line message in a small floating pane sized to the message.
+-- The pane closes after one second, or when you press a key.
 local function show_message(where, message)
-  local bounds, size = popup_bounds(where, #message + 2, 2)
+  local bounds, size = popup_bounds(where, #message + 2, 1)
   open_popup(where, bounds, size,
     { "bash", plugin_dir .. "/bin/message.sh", message, where.block_id })
 end
@@ -237,9 +236,32 @@ local function fail(message)
   error("fzf-url: " .. tostring(message), 0)
 end
 
+-- Turn opts.extra_patterns into REGEX URL argument pairs for
+-- bin/extract-urls.pl.
+local function extra_args(list)
+  local args = {}
+  if list == nil then return args end
+  if type(list) ~= "table" then fail("extra_patterns must be a list") end
+  for i, entry in ipairs(list) do
+    if type(entry) ~= "table" or type(entry.regex) ~= "string" or entry.regex == "" then
+      fail("extra_patterns[" .. i .. "] needs a regex string")
+    end
+    if entry.url ~= nil and type(entry.url) ~= "string" then
+      fail("extra_patterns[" .. i .. "].url must be a string")
+    end
+    table.insert(args, entry.regex)
+    table.insert(args, entry.url or "")
+  end
+  return args
+end
+
 -- Define the fzf_url action, and bind opts.key to it when it is set.
 function M.setup(opts)
   opts = opts or {}
+  local extract_cmd = { "perl", plugin_dir .. "/bin/extract-urls.pl" }
+  for _, arg in ipairs(extra_args(opts.extra_patterns)) do
+    table.insert(extract_cmd, arg)
+  end
   max_width = fraction(opts.max_width, max_width)
   max_height = fraction(opts.max_height, max_height)
   if type(opts.max_scrollback) == "number" and opts.max_scrollback >= 1 then
@@ -257,14 +279,7 @@ function M.setup(opts)
       local text, err = read_scrollback(ctx.block_id, max_scrollback)
       if text == nil then fail(err) end
 
-      local r, exec_err = rex.exec({ "perl", plugin_dir .. "/bin/extract-urls" }, {
-        stdin = text,
-        timeout = 10,
-        env = {
-          FZF_URL_EXTRA_PATTERN = opts.extra_pattern or false,
-          FZF_URL_EXTRA_SUB = opts.extra_sub or false,
-        },
-      })
+      local r, exec_err = rex.exec(extract_cmd, { stdin = text, timeout = 10 })
       if r == nil then fail(exec_err) end
       if not r.ok then fail(r.stderr) end
 
@@ -287,7 +302,7 @@ function M.setup(opts)
       local bounds, size = picker_bounds(where, urls)
       local _, layer_err = open_popup(where, bounds, size, {
         "env",
-        "FZF_URL_OPENER=" .. (opts.open or ""),
+        "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
         "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
         "FZF_URL_FZF_OPTIONS=" .. (opts.fzf_options or ""),
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
@@ -312,5 +327,10 @@ end
 
 -- For the tests.
 M._read_scrollback = read_scrollback
+M._extra_args = extra_args
+M._locate = locate
+M._popup_bounds = popup_bounds
+M._picker_bounds = picker_bounds
+M._limits = function() return max_width, max_height, max_scrollback end
 
 return M

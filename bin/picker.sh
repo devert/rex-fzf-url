@@ -6,7 +6,7 @@
 # Must stay compatible with macOS /bin/bash 3.2.
 #
 # Environment, set by init.lua from the setup() options:
-#   FZF_URL_OPENER       command that opens a URL (default: open or xdg-open)
+#   FZF_URL_OPEN_CMD     command that opens a URL (default: open or xdg-open)
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
@@ -41,9 +41,9 @@ rm -f "$url_file"
 [[ -z "$urls" ]] && exit 0
 
 # Draw fzf from the top of the pane, as tall as its content: one row per URL
-# plus 5 rows for the prompt, the help text, two border lines, and the bottom
-# padding. The pane can be a row taller than that, and the extra row is then
-# at the bottom, below the padding.
+# plus 4 rows for the prompt, the help text, and two border lines. There is
+# no bottom padding row, as Rex pads the bottom of a floating pane. The pane
+# can be a row taller than that, and the extra row is then at the bottom.
 # init.lua starts the terminal at the smallest size that the pane can get,
 # and sets FZF_URL_ROWS to its height. Without it, the terminal starts at the
 # default size of 80x24, and the app sets the size of the pane shortly after
@@ -68,7 +68,7 @@ if [[ -z "$count" ]]; then
     set +f
     count=${#lines[@]}
 fi
-height=$((count + 5))
+height=$((count + 4))
 # With more URLs than fit, fill the pane and scroll the list. fzf limits
 # --height to the pane height, also after a resize. But the pane can get a
 # row more than FZF_URL_ROWS, and fzf would then grow by a row while you
@@ -94,7 +94,7 @@ selection=$(printf '%s\n' "$urls" | fzf \
     --header 'Enter: Open URL / CTRL-Y: Copy to clipboard' \
     --header-border top --header-first \
     --highlight-line --info inline-right \
-    --padding 0,1,1,1 \
+    --padding 0,1,0,1 \
     --height "$height" \
     ${FZF_URL_FZF_OPTIONS:-}) || exit 0
 
@@ -115,7 +115,7 @@ get_copy_cmd() {
 # The pane closes when this script exits, so openers other than macOS
 # `open` are detached with nohup to outlive it.
 open_url() {
-    if [[ -n "${FZF_URL_OPENER:-}" ]]; then nohup $FZF_URL_OPENER "$1" >/dev/null 2>&1 &
+    if [[ -n "${FZF_URL_OPEN_CMD:-}" ]]; then nohup $FZF_URL_OPEN_CMD "$1" >/dev/null 2>&1 &
     elif command -v open >/dev/null 2>&1; then open "$1"
     elif command -v xdg-open >/dev/null 2>&1; then nohup xdg-open "$1" >/dev/null 2>&1 &
     elif [[ -n "${BROWSER:-}" ]]; then nohup "$BROWSER" "$1" >/dev/null 2>&1 &
