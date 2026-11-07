@@ -1,6 +1,6 @@
 # Tests
 
-The tests do not need Rex. Fake programs and a fake `rex` Lua table replace Rex, fzf, and the clipboard tools.
+The tests do not need Rex. Fake programs and a fake `rex` Lua table replace Rex, fzf, the clipboard tools, and the URL openers.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ From the root of the repository, run all the test files:
 test/run.sh
 ```
 
-The script prints the pass and fail counts for each file. For each failed check, it prints the expected value and the value it got. If a check fails, the script exits with status 1.
+If a check fails, the script exits with status 1.
 
 To run one file:
 
@@ -36,7 +36,9 @@ Each test file tests one source file:
 - `picker.test.sh` tests `bin/picker.sh`.
 - `message.test.sh` tests `bin/message.sh`.
 
-`harness.lua` and `harness.sh` hold the checks that the test files share. Name a new test file `<source>.test.lua` or `<source>.test.sh`, so that `run.sh` finds it.
+`harness.lua` and `harness.sh` hold the checks that the test files share.
+
+Give a new test file the name of its source file without the extension, then `.test.lua` or `.test.sh`. `run.sh` finds test files by these names.
 
 ## Coverage
 
@@ -44,15 +46,25 @@ Coverage shows which lines of code the tests ran. luacov measures `init.lua`, `l
 
 ### Install the coverage tools
 
-You install the tools one time. You need Homebrew. Run this command:
+Install the tools one time. This step needs Homebrew. Run this command:
 
 ```sh
 test/install-coverage-tools.sh
 ```
 
-If luajit, luarocks, cpanminus, or kcov is missing, the script installs it with Homebrew. It installs luacov and luacov-html into `lua_modules/`, and Devel::Cover into `local/`, in the repository. Git ignores both folders. You can run the script again.
+If luajit, luarocks, cpanminus, or kcov is missing, the script installs it with Homebrew. The script installs luacov and luacov-html into `lua_modules/`, and Devel::Cover into `local/`, in the repository. You can run the script again.
 
-To remove the tools, delete `lua_modules/` and `local/`, and run `brew uninstall kcov`.
+To remove the tools, do these steps:
+
+1. Delete `lua_modules/` and `local/`.
+2. Uninstall the Homebrew formulas that the script installed and that nothing else uses. If you run the tests, keep luajit.
+
+   ```sh
+   brew uninstall kcov luarocks cpanminus
+   brew autoremove
+   ```
+
+   `brew autoremove` removes the dependencies that no other formula needs, such as the `lua` that luarocks installed.
 
 ### Make the reports
 
@@ -62,11 +74,7 @@ To run the tests and make the HTML reports, run this command:
 test/run.sh --open
 ```
 
-The script opens `test/coverage.html` in your browser. It has a link to each report, and each link opens in a new tab. The reports are:
-
-- `luacov-html/index.html` for the Lua code
-- `cover_db/coverage.html` for `bin/extract-urls.pl`
-- `kcov/index.html` for the bash scripts
+The script opens `test/coverage.html` in your browser. That page has a link to each report. Each link opens in a new tab.
 
 To get only the summaries in the terminal, run this command:
 
@@ -74,8 +82,4 @@ To get only the summaries in the terminal, run this command:
 test/run.sh --coverage
 ```
 
-Both commands also write `luacov.report.out`, which gives the hit count for each line of Lua. A line that did not run starts with `*` characters and a `0`.
-
-If the tools are not installed, the script stops with an error. Each coverage run deletes the reports from the previous run. Git ignores the report files.
-
-kcov does not count the first line of the `fzf` call in `bin/picker.sh`. bash 3.2 reports a command that spans lines at its last line, so kcov never sees a hit on the first line.
+If the tools are not installed, the script stops with an error. Each coverage run deletes the reports from the previous run.
