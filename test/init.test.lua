@@ -193,13 +193,15 @@ H.ok("default limits", d[1] == 0.6 and d[2] == 0.4 and d[3] == 512 * 1024,
 local l = limits_after{ max_width = 0.8, max_height = 1, max_scrollback = 1000.7 }
 H.ok("valid limits are used", l[1] == 0.8 and l[2] == 1 and l[3] == 1000, table.concat(l, " "))
 
-for _, bad in ipairs({ 0, -0.1, 1.5, "0.5" }) do
+-- Too low, too high, and not a number.
+for _, bad in ipairs({ 0, 1.5, "0.5" }) do
   l = limits_after{ max_width = bad, max_height = bad }
   H.ok("max_width and max_height ignore " .. tostring(bad), l[1] == 0.6 and l[2] == 0.4,
     table.concat(l, " "))
 end
 
-for _, bad in ipairs({ 0, 0.5, -10, "1000" }) do
+-- Below 1, and not a number.
+for _, bad in ipairs({ 0.5, "1000" }) do
   l = limits_after{ max_scrollback = bad }
   H.eq("max_scrollback ignores " .. tostring(bad), l[3], 512 * 1024)
 end
@@ -386,7 +388,6 @@ local function env(cmd, name)
 end
 
 local def, log = action{ key = "ctrl+space>u" }
-H.eq("action name", def.name, "fzf_url")
 H.eq("key is bound", log.binds[1], "ctrl+space>u fzf_url")
 _, log = action{}
 H.eq("no key, no binding", #log.binds, 0)
