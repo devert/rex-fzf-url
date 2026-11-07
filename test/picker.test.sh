@@ -111,14 +111,14 @@ check_eq "escape opens nothing" "" "$(log open)"
 run "$two" FAKE_FZF_OUTPUT='\n'
 check_eq "enter with no match opens nothing" "" "$(log open)"
 
-# The fzf height is the URL count plus 5, at most FZF_URL_ROWS.
+# The fzf height is the URL count plus 4, at most FZF_URL_ROWS.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
 run "$three" FZF_URL_COUNT=3
-check_eq "height fits the URLs" "8" "$(height)"
+check_eq "height fits the URLs" "7" "$(height)"
 run "$three" FZF_URL_COUNT=3 FZF_URL_ROWS=6
 check_eq "height is at most the pane rows" "6" "$(height)"
 run "$three"
-check_eq "height counts the URLs with no count given" "8" "$(height)"
+check_eq "height counts the URLs with no count given" "7" "$(height)"
 
 run "$two" FZF_URL_FZF_OPTIONS='--exact --reverse'
 check_eq "fzf_options are split into words" $'--exact\n--reverse' "$(log fzf.args | tail -2)"

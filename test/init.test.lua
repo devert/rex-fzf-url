@@ -239,12 +239,12 @@ fake_cache = {}
 local one = { { window_id = "window:1", layers = { { kind = "tiled", layout = leaf("block:1", 0, 0, 1, 1) } } } }
 local w = run_locate("block:1", one, { ["block:1"] = { 150, 40, cw = 8, ch = 16 } })
 H.eq("one pane: window", w.window_id, "window:1")
-range_is("one pane: columns", w.cols, 149.5, 150.5)
-range_is("one pane: rows", w.rows, 39.5, 40.5)
+range_is("one pane: columns", w.cols, 152.2, 153.4)
+range_is("one pane: rows", w.rows, 42.2, 43.4)
 H.eq("one pane: cell size", w.cell and w.cell.cell_width_px, 8)
 
 w = run_locate("block:1", one, { ["block:1"] = { 150, 40, old = true } })
-range_is("a server with no desired size", w.cols, 149.5, 150.5)
+range_is("a server with no desired size", w.cols, 152.2, 153.4)
 
 w = run_locate("block:9", one, { ["block:1"] = { 150, 40 } })
 H.eq("unknown block: no window", w.window_id, nil)
@@ -255,15 +255,15 @@ w = run_locate("block:1", one, {})
 H.eq("no sizes: window", w.window_id, "window:1")
 range_is("no sizes: default columns", w.cols, 160, 161)
 
--- Two panes side by side. 75 columns at 0.5 allows 152-158, and 76 columns
--- allows 154-160. Both hold, so the window is 154-158.
+-- Two panes side by side. 75 columns at 0.5 allows 153-158, and 76 columns
+-- allows 155-160. Both hold, so the window is 155-158.
 local two = { { window_id = "window:1", layers = { {
   kind = "tiled", layout = split(leaf("block:1", 0, 0, 0.5, 1), leaf("block:2", 0.5, 0, 0.5, 1)),
 } } } }
 local two_sizes = { ["block:1"] = { 75, 40 }, ["block:2"] = { 76, 40 } }
 w = run_locate("block:1", two, two_sizes)
-range_is("two panes: columns overlap", w.cols, 154, 158)
-range_is("two panes: rows", w.rows, 39.5, 40.5)
+range_is("two panes: columns overlap", w.cols, 155, 158)
+range_is("two panes: rows", w.rows, 42.2, 43.4)
 
 -- The block is in a floating layer. The tiled layer still gives the size.
 local floating = { { window_id = "window:1", layers = {
@@ -272,7 +272,7 @@ local floating = { { window_id = "window:1", layers = {
 } } }
 w = run_locate("block:5", floating, { ["block:1"] = { 150, 40 }, ["block:5"] = { 80, 20 } })
 H.eq("floating block: window", w.window_id, "window:1")
-range_is("floating block: tiled columns", w.cols, 149.5, 150.5)
+range_is("floating block: tiled columns", w.cols, 152.2, 153.4)
 H.eq("floating block: no cell size from tiled panes", w.cell, nil)
 
 -- Only the window that holds the block counts.
@@ -282,7 +282,7 @@ local windows = {
 }
 w = run_locate("block:2", windows, { ["block:1"] = { 150, 40 }, ["block:2"] = { 100, 30 } })
 H.eq("second window", w.window_id, "window:2")
-range_is("second window: columns", w.cols, 99.5, 100.5)
+range_is("second window: columns", w.cols, 102.2, 103.4)
 
 -- The layout key changes with the layout.
 local key = run_locate("block:1", two, two_sizes).key
@@ -291,10 +291,10 @@ H.ok("key changes with sizes",
   run_locate("block:1", two, { ["block:1"] = { 74, 40 }, ["block:2"] = { 76, 40 } }).key ~= key)
 
 -- A cache entry for the same layout narrows the range.
-fake_cache = { ["window:1"] = { key = key, cols = { 155, 156 }, rows = { 39.8, 41 } } }
+fake_cache = { ["window:1"] = { key = key, cols = { 155, 156 }, rows = { 42.5, 43.6 } } }
 w = run_locate("block:1", two, two_sizes)
 range_is("cache narrows columns", w.cols, 155, 156)
-range_is("cache narrows rows", w.rows, 39.8, 40.5)
+range_is("cache narrows rows", w.rows, 42.5, 43.4)
 
 -- A cache entry that doesn't overlap is newer than the layout, so use it.
 fake_cache = { ["window:1"] = { key = key, cols = { 200, 201 }, rows = { 50, 51 } } }
@@ -304,7 +304,7 @@ range_is("cache with no overlap is used", w.cols, 200, 201)
 -- A cache entry for another layout is ignored.
 fake_cache = { ["window:1"] = { key = "other", cols = { 155, 156 }, rows = { 40, 40.1 } } }
 w = run_locate("block:1", two, two_sizes)
-range_is("cache for another layout is ignored", w.cols, 154, 158)
+range_is("cache for another layout is ignored", w.cols, 155, 158)
 fake_cache = {}
 
 ------------------------------------------------------------------------
@@ -336,10 +336,10 @@ local function same_bounds(name, b1, b2)
     string.format("%.4f %.4f and %.4f %.4f", b1[3], b1[4], b2[3], b2[4]))
 end
 same_bounds("picker with short URLs fits the header",
-  P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 49, 7))
+  P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 49, 6))
 local long = "https://example.com/" .. string.rep("x", 60)
 same_bounds("picker fits the longest URL",
-  P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 7))
+  P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 6))
 
 ------------------------------------------------------------------------
 -- The fzf_url action

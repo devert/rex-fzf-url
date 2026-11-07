@@ -153,8 +153,8 @@ local function locate(block_id)
     if want ~= nil and type(rect) == "table" and rect[3] > 0 and rect[4] > 0 then
       if leaf.block_id == block_id then where.cell = s end
       key[#key + 1] = string.format("%s %.4f %.4f %d %d", leaf.block_id, rect[3], rect[4], want.columns, want.rows)
-      local cl, ch = popup_size.tiled_range(want.columns, rect[3], 4)
-      local rl, rh = popup_size.tiled_range(want.rows, rect[4], 3)
+      local cl, ch = popup_size.tiled_range(want.columns, rect[3])
+      local rl, rh = popup_size.tiled_range(want.rows, rect[4])
       cl, ch = popup_size.intersect(where.cols[1], where.cols[2], cl, ch)
       rl, rh = popup_size.intersect(where.rows[1], where.rows[2], rl, rh)
       if cl ~= nil then where.cols = { cl, ch } end
@@ -214,21 +214,20 @@ end
 
 -- Return bounds for the picker, sized to its content like
 -- junegunn/tmux-fzf-url: the longest line + 6 columns, and one row per URL
--- plus 5 rows for the prompt, the help text, two border lines, and the
--- bottom padding row.
+-- plus 4 rows for the prompt, the help text, and two border lines. Rex pads
+-- the bottom of a floating pane, so the picker needs no padding row.
 local function picker_bounds(where, urls)
   local width = #"Enter: Open URL / CTRL-Y: Copy to clipboard"
   for _, url in ipairs(urls) do
     if #url > width then width = #url end
   end
-  return popup_bounds(where, width + 6, #urls + 5)
+  return popup_bounds(where, width + 6, #urls + 4)
 end
 
--- Show a one-line message, with one empty row below it like the picker, in a
--- small floating pane sized to the message. The pane closes after one
--- second, or when you press a key.
+-- Show a one-line message in a small floating pane sized to the message.
+-- The pane closes after one second, or when you press a key.
 local function show_message(where, message)
-  local bounds, size = popup_bounds(where, #message + 2, 2)
+  local bounds, size = popup_bounds(where, #message + 2, 1)
   open_popup(where, bounds, size,
     { "bash", plugin_dir .. "/bin/message.sh", message, where.block_id })
 end
