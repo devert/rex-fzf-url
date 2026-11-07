@@ -52,7 +52,7 @@ while (my $line = <STDIN>) {
         elsif (defined $+{git_host}) { emit(trim("https://$+{git_host}/$+{git_path}")) }
         elsif (defined $+{www})      { emit(trim("http://$+{www}")) }
         elsif (defined $+{ip})       { emit(trim("http://$+{ip}")) }
-        elsif (defined $+{gh})       { emit("https://github.com/$+{gh}") }
+        else                         { emit("https://github.com/$+{gh}") }  # each match sets one group
     }
 
     for my $extra (@extras) {

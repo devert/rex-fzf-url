@@ -3,18 +3,9 @@
 --   luajit test/popup-size.test.lua
 
 local dir = (arg and arg[0] or ""):match("^(.*)/[^/]*$") or "."
+local H = dofile(dir .. "/harness.lua")
 local size = dofile(dir .. "/../lib/popup-size.lua")
-
-local pass, fail = 0, 0
-
-local function check(name, ok, detail)
-  if ok then
-    pass = pass + 1
-  else
-    fail = fail + 1
-    print("FAIL " .. name .. (detail and ("\n  " .. detail) or ""))
-  end
-end
+local check = H.ok
 
 -- The cells that the app gives a floating pane that is a fraction f of a
 -- window of w cells. round() rounds halves up.
@@ -97,5 +88,18 @@ check("format and parse round trip",
   back["window:1"].key == "k2" and back["window:2"].rows[2] == 4 and back["window:1"].cols[2] == 121)
 check("parse skips bad lines", next(size.parse("junk\nwindow:1 k 1 2 x 4\n")) == nil)
 
-print(string.format("%d passed, %d failed", pass, fail))
-os.exit(fail == 0 and 0 or 1)
+-- A pane that spans the window allows half a cell either way.
+local low, high = size.tiled_range(80, 1, 4)
+check("tiled range for a full pane", low == 79.5 and high == 80.5)
+
+check("load of a missing file is empty", next(size.load(os.tmpname() .. ".none")) == nil)
+check("load of no path is empty", next(size.load(nil)) == nil)
+
+local path = os.tmpname()
+size.save(path, back)
+local loaded = size.load(path)
+os.remove(path)
+check("save and load round trip",
+  loaded["window:1"].key == "k2" and loaded["window:2"].cols[1] == 1 and loaded["window:1"].rows[1] == 30)
+
+H.done()
