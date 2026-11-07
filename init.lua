@@ -3,7 +3,7 @@
 -- Install by cloning this repository into ~/.config/rex/plugins/rex-fzf-url,
 -- then add this to ~/.config/rex/init.lua:
 --
---   require("plugins.rex-fzf-url").setup{ key = "ctrl+space>u" }
+--   require("plugins.rex-fzf-url").setup({ key = "ctrl+space>u" })
 --
 -- See README.md for every option.
 

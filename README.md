@@ -31,7 +31,7 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
 2. Add this line to `~/.config/rex/init.lua`:
 
    ```lua
-   require("plugins.rex-fzf-url").setup{ key = "ctrl+space>u" }
+   require("plugins.rex-fzf-url").setup({ key = "ctrl+space>u" })
    ```
 
    To open the list, press Ctrl+Space, then U. You can set `key` to any key combination that Rex accepts.
@@ -49,10 +49,10 @@ If you set `XDG_CONFIG_HOME`, use `$XDG_CONFIG_HOME/rex` in place of `~/.config/
 Every configuration value is optional. Pass the ones that you want to `setup`:
 
 ```lua
-require("plugins.rex-fzf-url").setup{
+require("plugins.rex-fzf-url").setup({
   key = "ctrl+space>u",
   max_width = 0.8,
-}
+})
 ```
 
 ### `key`
