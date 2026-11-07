@@ -10,12 +10,16 @@
 # Rex window with screencapture while it types commands and uses the plugin.
 # Then it shows your session again and converts the video to a GIF.
 #
-# Do not use the keyboard or mouse while it records (about 35 seconds).
+# Do not use the keyboard or mouse while it records (about 25 seconds).
 # The first run asks for Screen Recording permission for Rex.
 # The demo copies a URL, so the script saves your clipboard text and puts it
 # back at the end.
 #
 # For a sharper GIF, make the Rex window smaller first, about 1100x700.
+#
+# The keys that the script presses do not come from the keyboard, so the GIF
+# shows each key name in a caption at the bottom of the window. osascript
+# draws each caption as an image, and ffmpeg puts it on the video.
 #
 # Environment:
 #   REX_DEMO_WIDTH   width of the GIF in pixels (default: the window width,
@@ -30,7 +34,7 @@ fps=${REX_DEMO_FPS:-15}
 
 die() { printf 'record.sh: %s\n' "$1" >&2; exit 1; }
 
-for cmd in rex jq ffmpeg gifski osascript screencapture perl; do
+for cmd in rex jq ffmpeg ffprobe gifski osascript screencapture perl; do
     command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found (brew install ffmpeg gifski jq)"
 done
 [[ -n "${REX_SESSION:-}" && -n "${REX_BLOCK:-}" ]] || die "run this script from a Rex pane"
@@ -41,6 +45,17 @@ client=${REX_DEMO_CLIENT:-$(rex client ls --json |
     jq -er '[.clients[] | select(.info.kind == "app")][0].client_id')} ||
     die "no Rex app is connected"
 home_window=$(rex block inspect "$REX_BLOCK" --json | jq -er '.block.window_id')
+
+# The demo shell starts in this folder. Rex shows the path of the folder in
+# the title of the pane, so the path is short and has no private names.
+demo_dir=/tmp/acme-app
+made_demo_dir=
+if [[ ! -e "$demo_dir" ]]; then
+    mkdir "$demo_dir"
+    made_demo_dir=1
+elif [[ ! -d "$demo_dir" || -n "$(ls -A "$demo_dir")" ]]; then
+    die "$demo_dir exists and is not an empty folder. Remove it, and then run the script again"
+fi
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/rex-fzf-url-demo.XXXXXX")
 saved_clip=$(pbpaste 2>/dev/null || true)
@@ -54,12 +69,13 @@ cleanup() {
     [[ -n "$demo_session" ]] && rex kill "$demo_session" >/dev/null 2>&1 || true
     printf '%s' "$saved_clip" | pbcopy
     rm -rf "$work"
+    [[ -n "$made_demo_dir" ]] && rmdir "$demo_dir" 2>/dev/null || true
     exit "$status"
 }
 trap cleanup EXIT
 
 # Run the demo shell with demo/.zshrc as its only configuration.
-created=$(rex new fzf-url-demo --window demo -c "$work" --shell=none --json -- \
+created=$(rex new fzf-url-demo --window demo -c "$demo_dir" --shell=none --json -- \
     env ZDOTDIR="$repo/demo" zsh -i)
 demo_session=$(jq -er '.session_id' <<<"$created")
 pane=$(jq -er '.initial_windows[0].block_ids[0]' <<<"$created")
@@ -95,6 +111,12 @@ type_text() {
 }
 key() { rex send-key -s "$demo_session" -b "$1" "${@:2}"; }
 
+# Show the name of a key in a caption, from now until one second later. The
+# captions go on the video after the recording.
+caption() {
+    printf '%s\t%s\n' "$(perl -e "printf '%.2f', $(now) - $start")" "$1" >>"$work/captions.tsv"
+}
+
 rex -C "$client" do session.select session_id="$demo_session" >/dev/null
 sleep 1
 
@@ -124,6 +146,7 @@ sleep 1.5
 
 # Open the plugin while the pane has no URLs. It shows "No URLs found." in a
 # small pane that closes after one second.
+caption "Ctrl+Space, U"
 rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
 wait_for 5 has_popup || die "the message did not open"
 wait_for 5 no_popup || die "the message did not close"
@@ -139,6 +162,7 @@ key "$pane" enter
 sleep 1.5
 
 # Open the picker in the demo pane, as the key binding does.
+caption "Ctrl+Space, U"
 rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
 wait_for 5 has_popup || die "the picker did not open"
 picker=$(popup)
@@ -155,16 +179,20 @@ sleep 0.8
 # filter moves the selection to the last URL, two rows below localhost.
 type_text "$picker" "pull"
 sleep 0.8
+caption "Tab"
 key "$picker" tab
 sleep 0.8
+caption "Ctrl+U"
 key "$picker" ctrl+u
 sleep 0.8
 key "$picker" up
 sleep 0.5
 key "$picker" up
 sleep 0.5
+caption "Tab"
 key "$picker" tab
 sleep 1.5
+caption "Ctrl+Y"
 key "$picker" ctrl+y
 wait_for 5 no_popup || die "the picker did not close"
 sleep 0.8
@@ -187,8 +215,58 @@ rex -C "$client" do session.select session_id="$REX_SESSION" window_id="$home_wi
 
 length=$(perl -e "printf '%.2f', $end - $start")
 mkdir -p "$work/frames" "$(dirname "$out")"
-ffmpeg -loglevel error -i "$work/demo.mov" -t "$length" \
-    -vf "fps=$fps,scale=$width:-1:flags=lanczos" "$work/frames/%04d.png"
+
+# Draw each caption as a PNG image: the key name in bold white text on a
+# dark box with round corners. The box is 5.5% of the video height.
+cat >"$work/caption.js" <<'EOF'
+ObjC.import("AppKit");
+function run(argv) {
+  const text = argv[0], out = argv[1], h = Number(argv[2]);
+  const pad = h * 0.45;
+  const attrs = $.NSMutableDictionary.alloc.init;
+  attrs.setObjectForKey($.NSFont.boldSystemFontOfSize(h * 0.5), $("NSFont"));
+  attrs.setObjectForKey($.NSColor.whiteColor, $("NSColor"));
+  const str = $.NSString.alloc.initWithUTF8String(text);
+  const size = str.sizeWithAttributes(attrs);
+  const w = Math.ceil(size.width + 2 * pad);
+  const rep = $.NSBitmapImageRep.alloc.initWithBitmapDataPlanesPixelsWidePixelsHighBitsPerSampleSamplesPerPixelHasAlphaIsPlanarColorSpaceNameBytesPerRowBitsPerPixel(
+    null, w, h, 8, 4, true, false, $.NSDeviceRGBColorSpace, 0, 0);
+  $.NSGraphicsContext.saveGraphicsState;
+  $.NSGraphicsContext.setCurrentContext($.NSGraphicsContext.graphicsContextWithBitmapImageRep(rep));
+  $.NSColor.colorWithSRGBRedGreenBlueAlpha(0.1, 0.1, 0.1, 0.85).setFill;
+  $.NSBezierPath.bezierPathWithRoundedRectXRadiusYRadius($.NSMakeRect(0, 0, w, h), h * 0.25, h * 0.25).fill;
+  str.drawAtPointWithAttributes($.NSMakePoint(pad, (h - size.height) / 2), attrs);
+  $.NSGraphicsContext.restoreGraphicsState;
+  rep.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $()).writeToFileAtomically(out, true);
+}
+EOF
+video_height=$(ffprobe -v error -select_streams v:0 -show_entries stream=height \
+    -of csv=p=0 "$work/demo.mov")
+caption_height=$(perl -e "printf '%d', $video_height * 0.055")
+
+# Put each caption on the video from its time until one second later, or
+# until the next caption starts.
+inputs=(-i "$work/demo.mov")
+filter="[0:v]null[v0]"
+n=0
+times=()
+labels=()
+while IFS=$'\t' read -r t label; do
+    times+=("$t")
+    labels+=("$label")
+done <"$work/captions.tsv"
+for ((i = 0; i < ${#times[@]}; i++)); do
+    t=${times[i]}
+    next=${times[i + 1]:-$length}
+    stop=$(perl -e "my \$s = $t + 1; my \$n = $next - 0.05; printf '%.2f', \$s < \$n ? \$s : \$n")
+    osascript -l JavaScript "$work/caption.js" "${labels[i]}" "$work/caption-$i.png" "$caption_height"
+    inputs+=(-i "$work/caption-$i.png")
+    n=$((i + 1))
+    filter+=";[v$i][$n:v]overlay=x=(W-w)/2:y=H-h-H*0.08:enable='between(t,$t,$stop)'[v$n]"
+done
+filter+=";[v$n]fps=$fps,scale=$width:-1:flags=lanczos[out]"
+ffmpeg -loglevel error "${inputs[@]}" -t "$length" -filter_complex "$filter" \
+    -map '[out]' "$work/frames/%04d.png"
 gifski --quiet --fps "$fps" --width "$width" --quality 90 -o "$out" "$work"/frames/*.png
 
 printf 'Wrote %s (%s)\n' "$out" "$(du -h "$out" | cut -f1)"

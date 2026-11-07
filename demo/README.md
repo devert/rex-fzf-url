@@ -6,7 +6,7 @@ This folder holds the script that records `docs/demo.gif`, the animation in the 
 
 - macOS. The script uses `screencapture` and `osascript`.
 - The Rex app for macOS, build 1853 or later, with this plugin installed and loaded. See the install steps in the main README. An earlier build does not add padding at the bottom of a floating pane, so the picker in the GIF has the wrong size.
-- `fzf`, `jq`, `ffmpeg`, and `gifski`.
+- `fzf`, `jq`, `ffmpeg`, and `gifski`. The `ffmpeg` formula also installs `ffprobe`, which the script uses.
 
 To install the tools with Homebrew, run:
 
@@ -37,13 +37,17 @@ rex actions | grep fzf_url
    ```
 
 3. If macOS asks for Screen Recording permission for Rex, give the permission. If macOS tells you to quit and open Rex again, do that, and then run the script again.
-4. Do not use the keyboard or the mouse until the script prints `Wrote .../docs/demo.gif`. The recording takes about 35 seconds, and the conversion to a GIF takes some more seconds.
+4. Do not use the keyboard or the mouse until the script prints `Wrote .../docs/demo.gif`. The recording takes about 25 seconds, and the conversion to a GIF takes some more seconds.
 
 When the recording stops, the script shows your session again and deletes the demo session. It also puts back the text that was in your clipboard before the demo. It does not keep images or files that were in the clipboard. If the script fails, it also does these steps.
 
 ## What the demo shows
 
+The demo shell starts in the folder `/tmp/acme-app`, because Rex shows the path of that folder in the title of the pane. The script makes the folder and deletes it at the end.
+
 First, the script opens the plugin while the demo pane has no URLs, as the key binding does. The plugin shows `No URLs found.` in a small pane that closes after one second. Then the demo pane runs `git push` and `npm run dev`, which print four URLs. The script opens the plugin again, and it shows the URL list. It moves the selection up and down. Then it types `pull` to filter the list, and marks the pull request URL with `Tab`. It clears the filter with `Ctrl+U`, moves up to the local Vite URL, and marks it with `Tab`. The list then shows both marked URLs. Then it copies both URLs with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the two copied URLs, one on each line.
+
+The script presses the keys without the keyboard, so the GIF shows a caption at the bottom of the window for each key: `Ctrl+Space, U` (the key binding from the main README), `Tab`, `Ctrl+U`, and `Ctrl+Y`. Each caption shows for one second. The script uses `osascript` to draw each caption as an image, and `ffmpeg` to put it on the video. The captions are not on the screen while the script records.
 
 ## Look at the result
 
@@ -76,6 +80,8 @@ To change the output in the demo pane, edit the `git` and `npm` functions in `.z
 To change the commands and the keys, edit the part of `record.sh` between the start of `screencapture` and the `kill -INT` line.
 
 ## Troubleshooting
+
+If the script stops with `/tmp/acme-app exists and is not an empty folder`, a file or another folder uses that name. Move it or delete it, and then run the script again.
 
 If the script stops with `screencapture made no video`, give Rex the Screen Recording permission. You find it in `System Settings > Privacy & Security > Screen Recording`. Then run the script again.
 
