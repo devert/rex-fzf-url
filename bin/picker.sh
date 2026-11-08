@@ -11,7 +11,7 @@
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
 #   FZF_URL_ROWS         the starting height of the pane, in rows
-#   FZF_URL_COUNT        the number of URLs in the file
+#   FZF_URL_LIST_ROWS    the rows of the URL list, with wrapped URLs
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
 set -u
@@ -40,10 +40,12 @@ urls=$(<"$url_file")
 rm -f "$url_file"
 [[ -z "$urls" ]] && exit 0
 
-# Draw fzf from the top of the pane, as tall as its content: one row per URL
-# plus 4 rows for the prompt, the help text, and two border lines. There is
+# Draw fzf from the top of the pane, as tall as its content: the rows of the
+# URL list plus 4 rows for the prompt, the help text, and two border lines. There is
 # no bottom padding row, as Rex pads the bottom of a floating pane. The pane
-# can be a row taller than that, and the extra row is then at the bottom.
+# can be one or two rows taller than that, and the extra rows are then at
+# the bottom. Two extra rows can happen in the first popup in a window,
+# before bin/measure.lua saves the size of the window.
 # init.lua starts the terminal at the smallest size that the pane can get,
 # and sets FZF_URL_ROWS to its height. Without it, the terminal starts at the
 # default size of 80x24, and the app sets the size of the pane shortly after
@@ -57,8 +59,9 @@ if [[ -z "${FZF_URL_ROWS:-}" ]]; then
     done
 fi
 
-# Count the URLs in bash when init.lua doesn't pass the count.
-count=${FZF_URL_COUNT:-}
+# Count the URLs in bash when init.lua doesn't pass the rows of the list.
+# This count doesn't know about wrapped URLs.
+count=${FZF_URL_LIST_ROWS:-}
 if [[ -z "$count" ]]; then
     set -f
     old_ifs=$IFS

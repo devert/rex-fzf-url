@@ -13,6 +13,13 @@
 -- window sizes: 153x49 and 125x38 cells in a full tiled pane. The inset
 -- measured 2.03 to 2.16 cells. W is in the cells that floating panes use,
 -- and it is about 3 cells more than a full tiled pane gets.
+--
+-- Later measurements at 9 window sizes, from 900x580 to 1728x1083 points,
+-- with the sidebar shown and hidden, found the same inset. But with the
+-- sidebar hidden, W in rows is about 2 rows less, and a full tiled pane
+-- keeps its rows. W in rows is then only 0.25 to 1.7 rows more than a full
+-- tiled pane gets. The plugin can't see the sidebar, so the ranges below
+-- hold both cases.
 
 local M = {}
 
@@ -20,12 +27,16 @@ local M = {}
 M.inset_low, M.inset_high = 1.95, 2.25
 
 -- Return the range of window sizes that a tiled pane of n cells allows, when
--- the pane is a fraction f of the window. A pane that spans the window has
--- 2.36 to 3.19 cells less than W. Other panes lose 1.7 to 2.8 cells of
--- f * W to padding and to the dividers between panes. Both ranges have a
--- margin.
-function M.tiled_range(n, f)
-  if f >= 0.999 then return n + 2.2, n + 3.4 end
+-- the pane is a fraction f of the window. rows is true for a height, and
+-- false for a width. A pane that spans the window has 1.64 to 3.25 columns
+-- less than W, and 0.25 to 3.38 rows less. Other panes lose 1.6 to 3.3
+-- cells of f * W to padding and to the dividers between panes. All ranges
+-- have a margin.
+function M.tiled_range(n, f, rows)
+  if f >= 0.999 then
+    if rows then return n + 0.1, n + 3.5 end
+    return n + 1.5, n + 3.5
+  end
   return (n + 1.5) / f, (n + 4) / f
 end
 
