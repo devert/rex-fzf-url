@@ -2,7 +2,9 @@
 
 A [Rex](https://www.superlogical.com/rex) plugin that lets you open or copy a URL from your terminal output.
 
-The plugin finds the URLs in the focused pane, including the text that scrolled out of view. It shows them in an [fzf](https://github.com/junegunn/fzf) list in a floating pane. The floating pane opens in the center of the window, over all other panes. You select a URL, and the plugin opens it in your browser or copies it to the clipboard.
+The plugin collects every URL in the focused pane, even ones that scrolled off screen. It lists them with [fzf](https://github.com/junegunn/fzf) in a floating pane. Pick one to open it in your browser or copy it to the clipboard.
+
+<img src="docs/demo.webp" width="1000" alt="Demo of rex-fzf-url">
 
 ## Use
 
@@ -51,7 +53,7 @@ Every configuration value is optional. Pass the ones that you want to `setup`:
 ```lua
 require("plugins.rex-fzf-url").setup({
   key = "ctrl+space>u",
-  max_width = 0.8,
+  max_width = 0.6,
 })
 ```
 
@@ -83,7 +85,7 @@ Extra flags for fzf. For example, `"--no-wrap"` stops long URLs from wrapping.
 
 The largest size of the floating pane, as a fraction of the window. A value must be more than 0 and at most 1, or the plugin ignores it. The pane fits its list of URLs and grows up to these limits. A longer list scrolls, and a longer URL wraps.
 
-**Default**: `max_width = 0.6` and `max_height = 0.4`.
+**Default**: `max_width = 0.8` and `max_height = 0.4`.
 
 ### `max_scrollback`
 

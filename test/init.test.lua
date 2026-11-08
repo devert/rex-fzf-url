@@ -187,16 +187,16 @@ local function limits_after(opts)
 end
 
 local d = limits_after(nil)
-H.ok("default limits", d[1] == 0.6 and d[2] == 0.4 and d[3] == 512 * 1024,
+H.ok("default limits", d[1] == 0.8 and d[2] == 0.4 and d[3] == 512 * 1024,
   table.concat(d, " "))
 
-local l = limits_after{ max_width = 0.8, max_height = 1, max_scrollback = 1000.7 }
-H.ok("valid limits are used", l[1] == 0.8 and l[2] == 1 and l[3] == 1000, table.concat(l, " "))
+local l = limits_after{ max_width = 0.6, max_height = 1, max_scrollback = 1000.7 }
+H.ok("valid limits are used", l[1] == 0.6 and l[2] == 1 and l[3] == 1000, table.concat(l, " "))
 
 -- Too low, too high, and not a number.
 for _, bad in ipairs({ 0, 1.5, "0.5" }) do
   l = limits_after{ max_width = bad, max_height = bad }
-  H.ok("max_width and max_height ignore " .. tostring(bad), l[1] == 0.6 and l[2] == 0.4,
+  H.ok("max_width and max_height ignore " .. tostring(bad), l[1] == 0.8 and l[2] == 0.4,
     table.concat(l, " "))
 end
 
@@ -314,7 +314,7 @@ local P = with_rex({}, function(m) return m end)
 local where = { cols = { 149.5, 150.5 }, rows = { 39.5, 40.5 }, cell = { cell_width_px = 8, cell_height_px = 16 } }
 
 local b, s = P._popup_bounds(where, 50, 10)
-local fw, start_cols = real_size.fraction(50, 149.5, 150.5, 0.6)
+local fw, start_cols = real_size.fraction(50, 149.5, 150.5, 0.8)
 local fh, start_rows = real_size.fraction(10, 39.5, 40.5, 0.4)
 H.ok("popup bounds are centered",
   near(b[1], (1 - fw) / 2) and near(b[2], (1 - fh) / 2) and near(b[3], fw) and near(b[4], fh))
@@ -323,7 +323,7 @@ H.ok("popup starting size", s.columns == start_cols and s.rows == start_rows,
 H.ok("popup keeps the cell size", s.cell_width_px == 8 and s.cell_height_px == 16)
 
 b = P._popup_bounds(where, 400, 100)
-H.ok("popup stays within the limits", b[3] <= 0.6 and b[4] <= 0.4, b[3] .. " " .. b[4])
+H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.4, b[3] .. " " .. b[4])
 
 for _, cell in ipairs({ { cell_width_px = 0, cell_height_px = 16 }, { cell_width_px = 8 } }) do
   s = select(2, P._popup_bounds({ cols = where.cols, rows = where.rows, cell = cell }, 50, 10))

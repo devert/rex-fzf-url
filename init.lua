@@ -90,7 +90,7 @@ end
 
 -- The largest popup, as fractions of the window. With more URLs than fit,
 -- the list scrolls. A URL wider than the popup wraps. setup can change both.
-local max_width, max_height = 0.6, 0.4
+local max_width, max_height = 0.8, 0.4
 
 -- Return value if it is a number above 0 and at most 1, else default.
 local function fraction(value, default)
