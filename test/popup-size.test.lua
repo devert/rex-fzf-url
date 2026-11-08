@@ -15,14 +15,28 @@ local function app_cells(f, w, k) return math.floor(f * w - (k or 2.1)) end
 local insets = { 2.03, 2.105, 2.147, 2.162 }
 
 -- Tiled panes measured in Rex for macOS: the window size W in floating
--- pane cells, a fraction of the window, and the cells of the pane. Each
--- range must hold W.
+-- pane cells, a fraction of the window, the cells of the pane, and true for
+-- rows. Each range must hold W. Where a measurement gave a range of W, both
+-- ends are here.
 for _, m in ipairs({
-  { 52.049, 1, 49 }, { 41.190, 1, 38 }, { 41.190, 1 / 3, 11 },
+  { 52.049, 1, 49, true }, { 41.190, 1, 38, true }, { 41.190, 1 / 3, 11, true },
   { 155.649, 1, 153 }, { 155.649, 0.5, 75 }, { 127.361, 1, 125 }, { 127.361, 0.5, 61 },
+  -- 1100x700 points with the sidebar hidden.
+  { 113.64, 1, 112 }, { 114.28, 1, 112 }, { 113.64, 0.5, 54 }, { 114.28, 0.5, 54 },
+  { 31.25, 1, 31, true }, { 31.75, 1, 31, true }, { 31.25, 0.5, 14, true }, { 31.75, 0.5, 14, true },
+  -- 1100x700 points with the sidebar shown.
+  { 89.44, 1, 87 }, { 90.09, 1, 87 }, { 89.44, 0.5, 42 }, { 90.09, 0.5, 42 },
+  { 32.75, 1, 31, true }, { 33.88, 1, 31, true }, { 32.75, 0.5, 14, true }, { 33.88, 0.5, 14, true },
+  -- 1728x1083 points with the sidebar hidden.
+  { 180.00, 0.5, 87 }, { 180.56, 0.5, 87 },
+  { 50.01, 1, 49, true }, { 50.72, 1, 49, true }, { 50.01, 0.5, 23, true }, { 50.72, 0.5, 23, true },
+  -- Other window sizes with the sidebar shown.
+  { 68.19, 1, 66 }, { 68.84, 1, 66 }, { 27.21, 1, 25, true }, { 28.36, 1, 25, true },
+  { 94.59, 1, 92 }, { 95.23, 1, 92 }, { 34.48, 1, 32, true }, { 35.09, 1, 32, true },
+  { 47.62, 1, 45, true }, { 48.38, 1, 45, true },
 }) do
-  local low, high = size.tiled_range(m[3], m[2])
-  check(string.format("tiled range for %d cells at %.2f holds %.3f", m[3], m[2], m[1]),
+  local low, high = size.tiled_range(m[3], m[2], m[4] == true)
+  check(string.format("tiled range for %d %s at %.2f holds %.3f", m[3], m[4] and "rows" or "columns", m[2], m[1]),
     low <= m[1] and m[1] < high, string.format("range %.2f %.2f", low, high))
 end
 
@@ -110,9 +124,12 @@ check("format and parse round trip",
   back["window:1"].key == "k2" and back["window:2"].rows[2] == 4 and back["window:1"].cols[2] == 121)
 check("parse skips bad lines", next(size.parse("junk\nwindow:1 k 1 2 x 4\n")) == nil)
 
--- A pane that spans the window allows 2.2 to 3.4 cells more.
-local low, high = size.tiled_range(80, 1)
-check("tiled range for a full pane", low == 82.2 and high == 83.4)
+-- A pane that spans the window allows 1.5 to 3.5 columns more, and 0.1 to
+-- 3.5 rows more.
+local low, high = size.tiled_range(80, 1, false)
+check("tiled range for a full pane: columns", low == 81.5 and high == 83.5)
+low, high = size.tiled_range(30, 1, true)
+check("tiled range for a full pane: rows", math.abs(low - 30.1) < 1e-9 and high == 33.5)
 
 check("load of a missing file is empty", next(size.load(os.tmpname() .. ".none")) == nil)
 check("load of no path is empty", next(size.load(nil)) == nil)
