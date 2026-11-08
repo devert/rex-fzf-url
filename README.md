@@ -51,7 +51,7 @@ Every configuration value is optional. Pass the ones that you want to `setup`:
 ```lua
 require("plugins.rex-fzf-url").setup({
   key = "ctrl+space>u",
-  max_width = 0.8,
+  max_width = 0.6,
 })
 ```
 
@@ -83,7 +83,7 @@ Extra flags for fzf. For example, `"--no-wrap"` stops long URLs from wrapping.
 
 The largest size of the floating pane, as a fraction of the window. A value must be more than 0 and at most 1, or the plugin ignores it. The pane fits its list of URLs and grows up to these limits. A longer list scrolls, and a longer URL wraps.
 
-**Default**: `max_width = 0.6` and `max_height = 0.4`.
+**Default**: `max_width = 0.8` and `max_height = 0.4`.
 
 ### `max_scrollback`
 
