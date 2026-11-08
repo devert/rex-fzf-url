@@ -1,45 +1,60 @@
 #!/usr/bin/env bash
-# record.sh: record the README demo as docs/demo.gif.
+# record.sh: record the README demo as docs/demo.webp.
 #
 # Run it from a Rex pane:
 #
-#   brew install ffmpeg gifski
+#   brew install ffmpeg webp jq
 #   demo/record.sh
 #
 # The script opens a demo session, shows it in the Rex app, and records the
-# Rex window with screencapture while it types commands and uses the plugin.
-# Then it shows your session again and converts the video to a GIF.
+# Rex window while it types commands and uses the plugin. Then it shows your
+# session again and converts the video to an animated WebP.
+#
+# Every step is lossless. demo/capture.swift records only the Rex window
+# with ScreenCaptureKit, at the full Retina size, in sRGB colors, with
+# transparent corners. ffmpeg stores the frames with QuickTime Animation, and
+# img2webp writes a lossless WebP. The first run compiles capture.swift,
+# which takes about 30 seconds, and keeps the program for the next runs.
 #
 # Do not use the keyboard or mouse while it records (about 25 seconds).
 # The first run asks for Screen Recording permission for Rex.
 # The demo copies a URL, so the script saves your clipboard text and puts it
 # back at the end.
 #
-# For a sharper GIF, make the Rex window smaller first, about 1100x700.
-#
-# The keys that the script presses do not come from the keyboard, so the GIF
-# shows each key name in a caption at the bottom of the window. osascript
-# draws each caption as an image, and ffmpeg puts it on the video.
+# The keys that the script presses do not come from the keyboard, so the
+# WebP shows each key name in a caption at the bottom of the window.
+# osascript draws each caption as an image, and ffmpeg puts it on the video.
 #
 # Environment:
-#   REX_DEMO_WIDTH   width of the GIF in pixels (default: the window width,
-#                    at most 1200)
-#   REX_DEMO_FPS     frames per second of the GIF (default: 15)
+#   REX_DEMO_WIDTH   width of the WebP in pixels (default: the window width
+#                    in screen pixels, which is two times the width in points
+#                    on a Retina screen)
+#   REX_DEMO_FPS     frames per second of the WebP (default: 25)
 #   REX_DEMO_CLIENT  the Rex app client to use (default: the first app)
 set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-out="$repo/docs/demo.gif"
-fps=${REX_DEMO_FPS:-15}
+out="$repo/docs/demo.webp"
+fps=${REX_DEMO_FPS:-25}
 
 die() { printf 'record.sh: %s\n' "$1" >&2; exit 1; }
 
-for cmd in rex jq ffmpeg ffprobe gifski osascript screencapture perl; do
-    command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found (brew install ffmpeg gifski jq)"
+for cmd in rex jq ffmpeg ffprobe img2webp osascript perl swiftc shasum; do
+    command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found (brew install ffmpeg webp jq, and xcode-select --install for swiftc)"
 done
 [[ -n "${REX_SESSION:-}" && -n "${REX_BLOCK:-}" ]] || die "run this script from a Rex pane"
 
 now() { perl -MTime::HiRes=time -e 'printf "%.2f\n", time'; }
+
+# Compile capture.swift once for each version of the file.
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/rex-fzf-url-demo"
+capture="$cache/capture-$(shasum -a 256 "$repo/demo/capture.swift" | cut -c1-12)"
+if [[ ! -x "$capture" ]]; then
+    printf "Compiling demo/capture.swift. This takes about 30 seconds.\n" >&2
+    mkdir -p "$cache"
+    swiftc -O -o "$capture.tmp" "$repo/demo/capture.swift" || die "capture.swift did not compile"
+    mv "$capture.tmp" "$capture"
+fi
 
 client=${REX_DEMO_CLIENT:-$(rex client ls --json |
     jq -er '[.clients[] | select(.info.kind == "app")][0].client_id')} ||
@@ -63,7 +78,8 @@ demo_session=
 
 cleanup() {
     status=$?
-    [[ -n "${rec_pid:-}" ]] && kill "$rec_pid" 2>/dev/null || true
+    [[ -n "${rec_pid:-}" ]] && kill -INT "$rec_pid" 2>/dev/null || true
+    [[ -n "${enc_pid:-}" ]] && wait "$enc_pid" 2>/dev/null || true
     rex -C "$client" do session.select session_id="$REX_SESSION" \
         window_id="$home_window" >/dev/null 2>&1 || true
     [[ -n "$demo_session" ]] && rex kill "$demo_session" >/dev/null 2>&1 || true
@@ -118,10 +134,13 @@ caption() {
 }
 
 rex -C "$client" do session.select session_id="$demo_session" >/dev/null
-sleep 1
+# Rex shows a message at the bottom of the window when it switches to the
+# demo session. Wait until the message is gone before the recording starts.
+sleep 4
 
-# Find the Rex window on screen: the largest normal window of the app.
-rect=$(osascript -l JavaScript -e '
+# Find the Rex window on screen: the largest normal window of the app. The
+# result is the window number and its size in points.
+read -r window_id win_w win_h < <(osascript -l JavaScript -e '
 ObjC.import("CoreGraphics");
 const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(
     $.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements,
@@ -131,17 +150,31 @@ const w = list
     .sort((a, b) => b.kCGWindowBounds.Width * b.kCGWindowBounds.Height
                   - a.kCGWindowBounds.Width * a.kCGWindowBounds.Height)[0];
 const b = w.kCGWindowBounds;
-[b.X, b.Y, b.Width, b.Height].map(Math.round).join(",");
-') || die "the Rex window was not found"
-window_width=${rect#*,*,}
-window_width=${window_width%%,*}
-width=${REX_DEMO_WIDTH:-$((window_width < 1200 ? window_width : 1200))}
-printf 'Recording the Rex window at %s. Do not use the keyboard or mouse.\n' "$rect" >&2
+[w.kCGWindowNumber, Math.round(b.Width), Math.round(b.Height)].join(" ");
+') || true
+[[ -n "${window_id:-}" ]] || die "the Rex window was not found"
+printf 'Recording the Rex window (%sx%s points). Do not use the keyboard or mouse.\n' \
+    "$win_w" "$win_h" >&2
 
-# Record for at most 60 seconds. The video is cut to the demo length below.
-screencapture -v -x -V 60 -R "$rect" "$work/demo.mov" >/dev/null 2>&1 &
+# capture writes raw frames into a FIFO, and ffmpeg stores them losslessly
+# with QuickTime Animation (qtrle). That codec keeps the transparent corners
+# and stores only the lines that change, so it keeps up at full size.
+mkfifo "$work/frames.fifo"
+# capture opens the FIFO for reading and writing, so the open does not wait
+# for ffmpeg, which starts when the frame size is known.
+"$capture" "$window_id" "$fps" 1<>"$work/frames.fifo" 2>"$work/capture.log" &
 rec_pid=$!
+size_known() { grep -q '^size ' "$work/capture.log" 2>/dev/null; }
+wait_for 10 size_known ||
+    die "capture did not start (check the Screen Recording permission for Rex): $(cat "$work/capture.log")"
+size=$(sed -n 's/^size //p' "$work/capture.log")
+ffmpeg -nostdin -loglevel error -f rawvideo -pixel_format bgra -video_size "$size" \
+    -framerate "$fps" -i "$work/frames.fifo" -t 60 -c:v qtrle -y "$work/demo.mov" &
+enc_pid=$!
+recording() { grep -q '^ready' "$work/capture.log" 2>/dev/null; }
+wait_for 10 recording || die "capture did not write a frame: $(cat "$work/capture.log")"
 start=$(now)
+width=${REX_DEMO_WIDTH:-${size%x*}}
 sleep 1.5
 
 # Open the plugin while the pane has no URLs. It shows "No URLs found." in a
@@ -203,12 +236,14 @@ key "$pane" enter
 sleep 2.5
 end=$(now)
 
-# Stop the recording. If screencapture ignores the signal, it stops at the
-# 60 second limit.
+# Stop the recording. When capture stops, the FIFO closes, and ffmpeg
+# writes the end of the file.
 kill -INT "$rec_pid" 2>/dev/null || true
 wait "$rec_pid" 2>/dev/null || true
 rec_pid=
-[[ -s "$work/demo.mov" ]] || die "screencapture made no video (check the Screen Recording permission for Rex)"
+wait "$enc_pid" || die "ffmpeg did not save the video"
+enc_pid=
+[[ -s "$work/demo.mov" ]] || die "ffmpeg made no video"
 
 # Show your session again before the conversion, which takes a moment.
 rex -C "$client" do session.select session_id="$REX_SESSION" window_id="$home_window" >/dev/null || true
@@ -245,9 +280,10 @@ video_height=$(ffprobe -v error -select_streams v:0 -show_entries stream=height 
 caption_height=$(perl -e "printf '%d', $video_height * 0.055")
 
 # Put each caption on the video from its time until one second later, or
-# until the next caption starts.
+# until the next caption starts. The frames stay RGBA from start to end, so
+# no step reduces the color detail or drops the transparent corners.
 inputs=(-i "$work/demo.mov")
-filter="[0:v]null[v0]"
+filter="[0:v]format=rgba[v0]"
 n=0
 times=()
 labels=()
@@ -262,11 +298,19 @@ for ((i = 0; i < ${#times[@]}; i++)); do
     osascript -l JavaScript "$work/caption.js" "${labels[i]}" "$work/caption-$i.png" "$caption_height"
     inputs+=(-i "$work/caption-$i.png")
     n=$((i + 1))
-    filter+=";[v$i][$n:v]overlay=x=(W-w)/2:y=H-h-H*0.08:enable='between(t,$t,$stop)'[v$n]"
+    filter+=";[v$i][$n:v]overlay=x=(W-w)/2:y=H-h-H*0.08:format=rgb:enable='between(t,$t,$stop)'[v$n]"
 done
-filter+=";[v$n]fps=$fps,scale=$width:-1:flags=lanczos[out]"
-ffmpeg -loglevel error "${inputs[@]}" -t "$length" -filter_complex "$filter" \
-    -map '[out]' "$work/frames/%04d.png"
-gifski --quiet --fps "$fps" --width "$width" --quality 90 -o "$out" "$work"/frames/*.png
+filter+=";[v$n]fps=$fps"
+[[ "$width" != "${size%x*}" ]] && filter+=",scale=$width:-2:flags=lanczos"
+filter+="[out]"
+ffmpeg -nostdin -loglevel error "${inputs[@]}" -t "$length" -filter_complex "$filter" \
+    -map '[out]' -pix_fmt rgba "$work/frames/%04d.png"
+
+# img2webp stores only the part of each frame that changed, so the frames
+# where nothing moves add almost nothing to the file.
+delay=$(perl -e "printf '%d', 1000 / $fps + 0.5")
+(cd "$work/frames" && img2webp -loop 0 -lossless -m 4 -d "$delay" *.png -o "$out" >/dev/null)
 
 printf 'Wrote %s (%s)\n' "$out" "$(du -h "$out" | cut -f1)"
+printf 'In the README, show it %s pixels wide: <img src="docs/demo.webp" width="%s">\n' \
+    "$win_w" "$win_w" >&2

@@ -4,6 +4,8 @@ A [Rex](https://www.superlogical.com/rex) plugin that lets you open or copy a UR
 
 The plugin collects every URL in the focused pane, even ones that scrolled off screen. It lists them with [fzf](https://github.com/junegunn/fzf) in a floating pane. Pick one to open it in your browser or copy it to the clipboard.
 
+<img src="docs/demo.webp" width="1000" alt="Demo of rex-fzf-url">
+
 ## Use
 
 Press the key that you set in the install steps. Then use these keys in the list:
