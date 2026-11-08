@@ -10,13 +10,14 @@
 # Rex window while it types commands and uses the plugin. Then it shows your
 # session again and converts the video to an animated WebP.
 #
-# Every step is lossless. demo/capture.swift records only the Rex window
-# with ScreenCaptureKit, at the full Retina size, in sRGB colors, with
-# transparent corners. ffmpeg stores the frames with QuickTime Animation, and
+# Every step is lossless. demo/capture.swift records the area of the Rex
+# window with ScreenCaptureKit, at the full Retina size, in sRGB colors, with
+# transparent corners. A window on top of Rex goes into the recording. ffmpeg stores the frames with QuickTime Animation, and
 # img2webp writes a lossless WebP. The first run compiles capture.swift,
 # which takes about 30 seconds, and keeps the program for the next runs.
 #
-# Do not use the keyboard or mouse while it records (about 25 seconds).
+# Make the Rex window about 1000x700 points first. Do not use the keyboard or
+# mouse while it records (about 30 seconds).
 # The first run asks for Screen Recording permission for Rex.
 # The demo copies a URL, so the script saves your clipboard text and puts it
 # back at the end.

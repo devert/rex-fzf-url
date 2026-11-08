@@ -126,9 +126,13 @@ If the script stops with `capture did not start`, give Rex the Screen Recording 
 
 If the script stops with `the picker did not open`, Rex did not load the plugin. Run `rex config reload`, and then run the script again.
 
-## Add the recording to the main README
+If the script stops with `run this script from a Rex pane`, open a pane in the Rex app, and run the script there.
 
-Put this line near the top of the main `README.md`. The `width` attribute shows the WebP at the size of the window in points, so the text is sharp on a Retina screen.
+If the script stops with `the Rex window was not found`, the Rex window is minimized or on a different desktop. Show the window, and then run the script again.
+
+## The recording in the main README
+
+The main `README.md` shows the recording with this line. If you change the size of the window, change the `width` value to the new width in points. The `width` attribute shows the WebP at the size of the window in points, so the text is sharp on a Retina screen.
 
 ```html
 <img src="docs/demo.webp" width="1000" alt="Demo of rex-fzf-url">
