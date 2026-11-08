@@ -1,12 +1,8 @@
 MIT License
 
 Copyright (c) 2026 Dennis Evert
-
-bin/extract-urls.pl contains code from these projects, which also use the
-MIT License:
-
-- wfxr/tmux-fzf-url: Copyright (c) 2018 Wenxuan Zhang
-- kaar/herdr-fzf-url: Copyright (c) 2026 Caspar Nettelbladt
+Copyright (c) 2018 Wenxuan Zhang (wfxr/tmux-fzf-url)
+Copyright (c) 2026 Caspar Nettelbladt (kaar/herdr-fzf-url)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
