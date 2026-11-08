@@ -35,10 +35,10 @@ The plugin has only been tested on macOS at this time.
 2. Add this line to `~/.config/rex/init.lua`:
 
    ```lua
-   require("plugins.rex-fzf-url").setup({ key = "ctrl+space>u" })
+   require("plugins.rex-fzf-url").setup({ key = "cmd+u" })
    ```
 
-   To open the list, press Ctrl+Space, then U. You can set `key` to any key combination that Rex accepts.
+   To open the list, press Cmd+U. You can set `key` to any key combination that Rex accepts.
 
 3. Load the new configuration:
 
@@ -54,14 +54,14 @@ Every configuration value is optional. Pass the ones that you want to `setup`:
 
 ```lua
 require("plugins.rex-fzf-url").setup({
-  key = "ctrl+space>u",
+  key = "cmd+u",
   max_width = 0.6,
 })
 ```
 
 ### `key`
 
-The key that opens the list, such as `"ctrl+space>u"`.
+The key that opens the list, such as `"cmd+u"`.
 
 **Default**: none. The plugin does not bind a key, but you can open the list from the command palette.
 

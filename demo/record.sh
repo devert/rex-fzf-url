@@ -180,7 +180,7 @@ sleep 1.5
 
 # Open the plugin while the pane has no URLs. It shows "No URLs found." in a
 # small pane that closes after one second.
-caption "Ctrl+Space, U"
+caption "Cmd+U"
 rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
 wait_for 5 has_popup || die "the message did not open"
 wait_for 5 no_popup || die "the message did not close"
@@ -196,7 +196,7 @@ key "$pane" enter
 sleep 1.5
 
 # Open the picker in the demo pane, as the key binding does.
-caption "Ctrl+Space, U"
+caption "Cmd+U"
 rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
 wait_for 5 has_popup || die "the picker did not open"
 picker=$(popup)

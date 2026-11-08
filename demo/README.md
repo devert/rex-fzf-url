@@ -84,7 +84,7 @@ First, the script opens the plugin while the demo pane has no URLs, as the key b
 
 The script opens the plugin again, and it shows the URL list. It moves the selection up and down. Then it types `pull` to filter the list, and marks the pull request URL with `Tab`. It clears the filter with `Ctrl+U`, moves up to the local Vite URL, and marks it with `Tab`. Then it copies both URLs with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the two copied URLs, one on each line.
 
-The script presses the keys without the keyboard, so the recording shows a caption at the bottom of the window for each key: `Ctrl+Space, U` (the key binding from the main README), `Tab`, `Ctrl+U`, and `Ctrl+Y`. Each caption shows for one second. The script uses `osascript` to draw each caption as an image, and `ffmpeg` to put it on the video. The captions are not on the screen while the script records.
+The script presses the keys without the keyboard, so the recording shows a caption at the bottom of the window for each key: `Cmd+U` (the key binding from the main README), `Tab`, `Ctrl+U`, and `Ctrl+Y`. Each caption shows for one second. The script uses `osascript` to draw each caption as an image, and `ffmpeg` to put it on the video. The captions are not on the screen while the script records.
 
 ## Look at the result
 
