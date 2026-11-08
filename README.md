@@ -2,7 +2,7 @@
 
 A [Rex](https://www.superlogical.com/rex) plugin that lets you open or copy a URL from your terminal output.
 
-The plugin finds the URLs in the focused pane, including the text that scrolled out of view. It shows them in an [fzf](https://github.com/junegunn/fzf) list in a floating pane. The floating pane opens in the center of the window, over all other panes. You select a URL, and the plugin opens it in your browser or copies it to the clipboard.
+The plugin collects every URL in the focused pane, even ones that scrolled off screen. It lists them with [fzf](https://github.com/junegunn/fzf) in a floating pane. Pick one to open it in your browser or copy it to the clipboard.
 
 ## Use
 
