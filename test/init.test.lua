@@ -409,8 +409,8 @@ local function env(cmd, name)
   end
 end
 
-local def, log = action{ key = "ctrl+space>u" }
-H.eq("key is bound", log.binds[1], "ctrl+space>u fzf_url")
+local def, log = action{ key = "cmd+u" }
+H.eq("key is bound", log.binds[1], "cmd+u fzf_url")
 _, log = action{}
 H.eq("no key, no binding", #log.binds, 0)
 
