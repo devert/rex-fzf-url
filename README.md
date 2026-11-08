@@ -18,6 +18,8 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
 
 ## Requirements
 
+The plugin has only been tested for macOS at this time.
+
 - [Rex](https://www.superlogical.com/rex)
 - [fzf](https://github.com/junegunn/fzf), in the `PATH` of your login shell (the shell that starts in new panes)
 - [perl](https://www.perl.org) and [bash](https://www.gnu.org/software/bash/) (macOS includes both)
