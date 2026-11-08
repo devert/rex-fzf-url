@@ -115,4 +115,4 @@ If a `regex` is not valid Perl, the plugin finds no URLs and stops with the erro
 
 ## License
 
-MIT. Based on [junegunn/tmux-fzf-url](https://github.com/junegunn/tmux-fzf-url), [wfxr/tmux-fzf-url](https://github.com/wfxr/tmux-fzf-url), and [kaar/herdr-fzf-url](https://github.com/kaar/herdr-fzf-url), all MIT.
+MIT. Inspired by [junegunn/tmux-fzf-url](https://github.com/junegunn/tmux-fzf-url), [wfxr/tmux-fzf-url](https://github.com/wfxr/tmux-fzf-url), and [kaar/herdr-fzf-url](https://github.com/kaar/herdr-fzf-url). The URL patterns in `bin/extract-urls.pl` are ported from wfxr/tmux-fzf-url, and the Perl code is adapted from kaar/herdr-fzf-url. Both projects use the MIT license. See [LICENSE](LICENSE) for their copyright notices.
