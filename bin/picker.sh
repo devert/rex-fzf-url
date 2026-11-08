@@ -43,7 +43,9 @@ rm -f "$url_file"
 # Draw fzf from the top of the pane, as tall as its content: one row per URL
 # plus 4 rows for the prompt, the help text, and two border lines. There is
 # no bottom padding row, as Rex pads the bottom of a floating pane. The pane
-# can be a row taller than that, and the extra row is then at the bottom.
+# can be one or two rows taller than that, and the extra rows are then at
+# the bottom. Two extra rows can happen in the first popup in a window,
+# before bin/measure.lua saves the size of the window.
 # init.lua starts the terminal at the smallest size that the pane can get,
 # and sets FZF_URL_ROWS to its height. Without it, the terminal starts at the
 # default size of 80x24, and the app sets the size of the pane shortly after

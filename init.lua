@@ -153,8 +153,8 @@ local function locate(block_id)
     if want ~= nil and type(rect) == "table" and rect[3] > 0 and rect[4] > 0 then
       if leaf.block_id == block_id then where.cell = s end
       key[#key + 1] = string.format("%s %.4f %.4f %d %d", leaf.block_id, rect[3], rect[4], want.columns, want.rows)
-      local cl, ch = popup_size.tiled_range(want.columns, rect[3])
-      local rl, rh = popup_size.tiled_range(want.rows, rect[4])
+      local cl, ch = popup_size.tiled_range(want.columns, rect[3], false)
+      local rl, rh = popup_size.tiled_range(want.rows, rect[4], true)
       cl, ch = popup_size.intersect(where.cols[1], where.cols[2], cl, ch)
       rl, rh = popup_size.intersect(where.rows[1], where.rows[2], rl, rh)
       if cl ~= nil then where.cols = { cl, ch } end

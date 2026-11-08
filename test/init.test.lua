@@ -239,12 +239,12 @@ fake_cache = {}
 local one = { { window_id = "window:1", layers = { { kind = "tiled", layout = leaf("block:1", 0, 0, 1, 1) } } } }
 local w = run_locate("block:1", one, { ["block:1"] = { 150, 40, cw = 8, ch = 16 } })
 H.eq("one pane: window", w.window_id, "window:1")
-range_is("one pane: columns", w.cols, 152.2, 153.4)
-range_is("one pane: rows", w.rows, 42.2, 43.4)
+range_is("one pane: columns", w.cols, 151.5, 153.5)
+range_is("one pane: rows", w.rows, 40.1, 43.5)
 H.eq("one pane: cell size", w.cell and w.cell.cell_width_px, 8)
 
 w = run_locate("block:1", one, { ["block:1"] = { 150, 40, old = true } })
-range_is("a server with no desired size", w.cols, 152.2, 153.4)
+range_is("a server with no desired size", w.cols, 151.5, 153.5)
 
 w = run_locate("block:9", one, { ["block:1"] = { 150, 40 } })
 H.eq("unknown block: no window", w.window_id, nil)
@@ -263,7 +263,7 @@ local two = { { window_id = "window:1", layers = { {
 local two_sizes = { ["block:1"] = { 75, 40 }, ["block:2"] = { 76, 40 } }
 w = run_locate("block:1", two, two_sizes)
 range_is("two panes: columns overlap", w.cols, 155, 158)
-range_is("two panes: rows", w.rows, 42.2, 43.4)
+range_is("two panes: rows", w.rows, 40.1, 43.5)
 
 -- The block is in a floating layer. The tiled layer still gives the size.
 local floating = { { window_id = "window:1", layers = {
@@ -272,7 +272,7 @@ local floating = { { window_id = "window:1", layers = {
 } } }
 w = run_locate("block:5", floating, { ["block:1"] = { 150, 40 }, ["block:5"] = { 80, 20 } })
 H.eq("floating block: window", w.window_id, "window:1")
-range_is("floating block: tiled columns", w.cols, 152.2, 153.4)
+range_is("floating block: tiled columns", w.cols, 151.5, 153.5)
 H.eq("floating block: no cell size from tiled panes", w.cell, nil)
 
 -- Only the window that holds the block counts.
@@ -282,7 +282,7 @@ local windows = {
 }
 w = run_locate("block:2", windows, { ["block:1"] = { 150, 40 }, ["block:2"] = { 100, 30 } })
 H.eq("second window", w.window_id, "window:2")
-range_is("second window: columns", w.cols, 102.2, 103.4)
+range_is("second window: columns", w.cols, 101.5, 103.5)
 
 -- The layout key changes with the layout.
 local key = run_locate("block:1", two, two_sizes).key
@@ -294,7 +294,7 @@ H.ok("key changes with sizes",
 fake_cache = { ["window:1"] = { key = key, cols = { 155, 156 }, rows = { 42.5, 43.6 } } }
 w = run_locate("block:1", two, two_sizes)
 range_is("cache narrows columns", w.cols, 155, 156)
-range_is("cache narrows rows", w.rows, 42.5, 43.4)
+range_is("cache narrows rows", w.rows, 42.5, 43.5)
 
 -- A cache entry that doesn't overlap is newer than the layout, so use it.
 fake_cache = { ["window:1"] = { key = key, cols = { 200, 201 }, rows = { 50, 51 } } }
