@@ -340,6 +340,28 @@ same_bounds("picker with short URLs fits the header",
 local long = "https://example.com/" .. string.rep("x", 60)
 same_bounds("picker fits the longest URL",
   P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 6))
+H.eq("picker list rows with no wrap", select(3, P._picker_bounds(where, { "https://a.example.com", long })), 2)
+
+-- fzf puts cols - 5 characters on the first row of a URL, and 2 fewer on
+-- each next row. These counts come from fzf at 30 and 40 columns.
+local pr = "https://github.com/acme/acme-app/pull/new/fix-login-redirect"
+local a120 = "https://example.com/" .. string.rep("a", 100)
+H.eq("list rows: short URLs", P._list_rows({ "https://a.example.com", "http://localhost:5173/" }, 40), 2)
+H.eq("list rows: a URL that fits exactly", P._list_rows({ string.rep("x", 35) }, 40), 1)
+H.eq("list rows: a URL one character too long", P._list_rows({ string.rep("x", 36) }, 40), 2)
+H.eq("list rows: 60 characters at 30 columns", P._list_rows({ pr }, 30), 3)
+H.eq("list rows: 60 characters at 40 columns", P._list_rows({ pr }, 40), 2)
+H.eq("list rows: 120 characters at 30 columns", P._list_rows({ a120 }, 30), 6)
+H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http://localhost:5173/" }, 40), 7)
+
+-- When max_width makes the pane narrower than the longest URL, the picker
+-- gets a row for each wrapped part, counted at the fewest columns that the
+-- pane can get.
+local narrow = { cols = { 79.5, 80.5 }, rows = { 39.5, 40.5 } }
+local nb, ns, nrows = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
+H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, ns.columns))
+H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
+same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 6, nrows + 4))
 
 ------------------------------------------------------------------------
 -- The fzf_url action
@@ -432,7 +454,7 @@ H.eq("picker gets open_cmd", env(cmd, "FZF_URL_OPEN_CMD"), "firefox")
 H.eq("picker gets copy_cmd", env(cmd, "FZF_URL_COPY_CMD"), "xclip")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
-H.eq("picker gets the count", env(cmd, "FZF_URL_COUNT"), "3")
+H.eq("picker gets the list rows", env(cmd, "FZF_URL_LIST_ROWS"), "3")
 H.eq("picker gets the starting rows", env(cmd, "FZF_URL_ROWS"), tostring(log.layers[1].layout.options.size.rows))
 H.ok("picker gets the measure spec", (env(cmd, "FZF_URL_MEASURE") or ""):match("^window:1 %x+ [%d.]+ [%d.]+$"),
   env(cmd, "FZF_URL_MEASURE"))
