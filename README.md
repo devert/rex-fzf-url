@@ -21,7 +21,7 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
 The plugin has only been tested on macOS at this time.
 
 - [Rex](https://www.superlogical.com/rex)
-- [fzf](https://github.com/junegunn/fzf), in the `PATH` of your login shell (the shell that starts in new panes)
+- [fzf](https://github.com/junegunn/fzf), in a folder that the picker searches (see [`fzf_path`](#fzf_path))
 - [perl](https://www.perl.org) and [bash](https://www.gnu.org/software/bash/) (macOS includes both)
 
 ## Install
@@ -76,6 +76,22 @@ The command that opens a URL, such as `"open -a Firefox"`.
 The command that copies text to the clipboard, such as `"pbcopy"`.
 
 **Default**: the first of these commands that the plugin finds: `pbcopy`, `wl-copy`, `xclip -selection clipboard`, and `xsel --clipboard --input`.
+
+### `fzf_path`
+
+The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. A leading `~` is your home folder.
+
+The picker does not start a shell, so your shell startup files do not change its `PATH`. It gets the `PATH` of the Rex app. When you start Rex from the Finder or the Dock, that `PATH` holds only the system folders. So the picker also searches these folders, after `PATH`:
+
+- `/opt/homebrew/bin`
+- `/usr/local/bin`
+- `~/.local/bin`
+- `~/.nix-profile/bin`
+- `~/.local/share/mise/shims`
+
+If fzf is in a different folder, set this option. The picker also uses these folders to find the commands in `open_cmd` and `copy_cmd`.
+
+**Default**: the first `fzf` in `PATH` or in the folders above.
 
 ### `fzf_options`
 

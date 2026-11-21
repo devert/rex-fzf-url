@@ -8,6 +8,7 @@
 # Environment, set by init.lua from the setup() options:
 #   FZF_URL_OPEN_CMD     command that opens a URL (default: open or xdg-open)
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
+#   FZF_URL_FZF_PATH     the full path of fzf (default: fzf in PATH)
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
 #   FZF_URL_ROWS         the starting height of the pane, in rows
@@ -32,7 +33,21 @@ fail() {
     exit 1
 }
 
-command -v fzf >/dev/null 2>&1 || fail "fzf not found in PATH"
+# Rex starts this pane without a shell, so PATH is the one of the Rex app.
+# An app that starts from Finder gets only the system folders, without the
+# folders that shell startup files add. So add the folders where fzf and
+# other tools are usually installed. They go last, so PATH still wins.
+# FZF_URL_EXTRA_PATH replaces the list, for the tests.
+PATH="$PATH:${FZF_URL_EXTRA_PATH-/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$HOME/.local/share/mise/shims}"
+
+if [[ -n "${FZF_URL_FZF_PATH:-}" ]]; then
+    fzf=${FZF_URL_FZF_PATH/#\~/$HOME}
+    [[ -f "$fzf" && -x "$fzf" ]] || fail "fzf_path is not an executable file: $FZF_URL_FZF_PATH"
+else
+    fzf=fzf
+    command -v fzf >/dev/null 2>&1 ||
+        fail "fzf not found. Set fzf_path in setup() to the full path of fzf."
+fi
 
 url_file="${1:-}"
 [[ -n "$url_file" && -f "$url_file" ]] || fail "no URL list file"
@@ -95,7 +110,7 @@ fi
 # line. The selections follow.
 # $FZF_URL_FZF_OPTIONS is intentionally unquoted: word-splitting is the point.
 # shellcheck disable=SC2086
-selection=$(printf '%s\n' "$urls" | fzf \
+selection=$(printf '%s\n' "$urls" | "$fzf" \
     --multi --no-margin --no-padding --no-border --wrap \
     --expect ctrl-y --style default \
     --header 'Enter: Open URL / CTRL-Y: Copy to clipboard' \

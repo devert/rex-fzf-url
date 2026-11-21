@@ -48,7 +48,7 @@ picker() {
   shift
   LOG=$(mktemp -d "$TMP/log.XXXX")
   env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} HOME="$HOME" PATH="$FAKE:/bin" LOG="$LOG" \
-    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 "$@" \
+    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 FZF_URL_EXTRA_PATH= "$@" \
     /bin/bash "$DIR/bin/picker.sh" "$file" >/dev/null 2>"$TMP/stderr"
   status=$?
   err=$(grep '^fzf-url:' "$TMP/stderr")
@@ -159,7 +159,27 @@ check_eq "no measure spec, no measure.lua" "" "$(grep '^do ' "$LOG/rex")"
 
 run "$two" PATH="$NOFZF:/bin"
 check_eq "no fzf fails" "1" "$status"
-check_eq "no fzf message" "fzf-url: fzf not found in PATH" "$err"
+check_eq "no fzf message" "fzf-url: fzf not found. Set fzf_path in setup() to the full path of fzf." "$err"
+
+# Without fzf in PATH, find it in the usual install folders, after PATH.
+run "$two" PATH="$NOFZF:/bin" FZF_URL_EXTRA_PATH="$TMP/missing:$FAKE"
+check_eq "fzf in an install folder is used" "0" "$status"
+check_eq "fzf in an install folder gets the URLs" "$two" "$(log fzf.in)"
+
+# fzf_path replaces fzf in PATH. A leading ~ is the home folder.
+mkdir -p "$TMP/home/apps"
+cp "$FAKE/fzf" "$TMP/home/apps/myfzf"
+run "$two" PATH="$NOFZF:/bin" FZF_URL_FZF_PATH="$TMP/home/apps/myfzf"
+check_eq "fzf_path is used" "$two" "$(log fzf.in)"
+run "$two" PATH="$NOFZF:/bin" HOME="$TMP/home" FZF_URL_FZF_PATH="~/apps/myfzf"
+check_eq "fzf_path expands ~" "$two" "$(log fzf.in)"
+run "$two" FZF_URL_FZF_PATH="$TMP/home/apps"
+check_eq "fzf_path that is a folder fails" "1" "$status"
+check_eq "fzf_path that is a folder message" \
+  "fzf-url: fzf_path is not an executable file: $TMP/home/apps" "$err"
+run "$two" FZF_URL_FZF_PATH="$TMP/nothing"
+check_eq "fzf_path that is missing fails" "1" "$status"
+check_eq "fzf_path that is missing does not run fzf" "" "$(log fzf.in)"
 
 picker "$TMP/none"
 check_eq "a missing URL file fails" "1" "$status"

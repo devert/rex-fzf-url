@@ -332,6 +332,7 @@ function M.setup(opts)
         "env",
         "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
         "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
+        "FZF_URL_FZF_PATH=" .. (opts.fzf_path or ""),
         "FZF_URL_FZF_OPTIONS=" .. (opts.fzf_options or ""),
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
         "FZF_URL_ROWS=" .. size.rows,
