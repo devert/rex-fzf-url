@@ -10,7 +10,8 @@
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
-#   FZF_URL_LIST_ROWS    the rows of the URL list, with wrapped URLs
+#   FZF_URL_HEADER       the help text below the prompt
+#   FZF_URL_HEIGHT       the rows that fzf needs, with wrapped URLs
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
 set -u
@@ -39,12 +40,12 @@ urls=$(<"$url_file")
 rm -f "$url_file"
 [[ -z "$urls" ]] && exit 0
 
-# Draw fzf from the top of the pane, as tall as its content: the rows of the
-# URL list plus 4 rows for the prompt, the help text, and two border lines. There is
-# no bottom padding row, as Rex pads the bottom of a floating pane. The pane
-# can be one or two rows taller than that, and the extra rows are then at
-# the bottom. Two extra rows can happen in the first popup in a window,
-# before bin/measure.lua saves the size of the window.
+# Draw fzf from the top of the pane, as tall as its content. init.lua works
+# out that height in FZF_URL_HEIGHT, from the layout that the fzf options
+# below set. There is no bottom padding row, as Rex pads the bottom of a
+# floating pane. The pane can be one or two rows taller than that, and the
+# extra rows are then at the bottom. Two extra rows can happen in the first
+# popup in a window, before bin/measure.lua saves the size of the window.
 # The terminal starts at the default size of 80x24, and the app sets the size
 # of the pane shortly after it opens. fzf draws in place with --height, so
 # lines that it draws before the resize stay on the screen. So wait for the
@@ -54,21 +55,9 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
     sleep 0.02
 done
 
-# Count the URLs in bash when init.lua doesn't pass the rows of the list.
-# This count doesn't know about wrapped URLs.
-count=${FZF_URL_LIST_ROWS:-}
-if [[ -z "$count" ]]; then
-    set -f
-    old_ifs=$IFS
-    IFS=$'\n'
-    lines=($urls)
-    IFS=$old_ifs
-    set +f
-    count=${#lines[@]}
-fi
 # With more URLs than fit, fzf limits --height to the pane height, so it
-# fills the pane and scrolls the list.
-height=$((count + 4))
+# fills the pane and scrolls the list. Without a height, fill the pane.
+height=${FZF_URL_HEIGHT:-100%}
 
 # Save the size that the app gives this pane, so that the next popup in this
 # window fits its content exactly. This runs in the background, so fzf starts
@@ -81,7 +70,9 @@ fi
 # --no-border, --no-margin, and --no-padding stop FZF_DEFAULT_OPTS from adding
 # rows that the popup size does not count. Those rows hide part of the URL list.
 # --multi lets Tab select more than one URL. --wrap wraps a long URL onto more
-# rows instead of cutting it off. FZF_URL_LIST_ROWS counts those extra rows.
+# rows instead of cutting it off. FZF_URL_HEIGHT counts those extra rows.
+# The padding, the header, and its border set the layout that init.lua sizes
+# the pane for. Change them together with the layout table in init.lua.
 # Rest of fzf options ported from junegunn/tmux-fzf-url's fzf-url.rb.
 # --expect reports the pressed key (ctrl-y, or empty for Enter) on the first output
 # line. The selections follow.
@@ -90,7 +81,7 @@ fi
 selection=$(printf '%s\n' "$urls" | fzf \
     --multi --no-margin --no-padding --no-border --wrap \
     --expect ctrl-y --style default \
-    --header 'Enter: Open URL / CTRL-Y: Copy to clipboard' \
+    --header "${FZF_URL_HEADER:-}" \
     --header-border top --header-first \
     --highlight-line --info inline-right \
     --padding 0,0,0,1 \

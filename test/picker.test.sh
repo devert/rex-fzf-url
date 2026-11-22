@@ -111,15 +111,18 @@ check_eq "escape opens nothing" "" "$(log open)"
 run "$two" FAKE_FZF_OUTPUT='\n'
 check_eq "enter with no match opens nothing" "" "$(log open)"
 
-# The fzf height is the rows of the URL list plus 4. fzf itself limits it to
-# the pane height.
+# The fzf height comes from init.lua. fzf itself limits it to the pane
+# height. Without one, fzf fills the pane.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
-run "$three" FZF_URL_LIST_ROWS=3
-check_eq "height fits the URLs" "7" "$(height)"
-run "$three" FZF_URL_LIST_ROWS=5
-check_eq "height fits wrapped URLs" "9" "$(height)"
+run "$three" FZF_URL_HEIGHT=7
+check_eq "height comes from FZF_URL_HEIGHT" "7" "$(height)"
 run "$three"
-check_eq "height counts the URLs with no count given" "7" "$(height)"
+check_eq "no height fills the pane" "100%" "$(height)"
+
+# The help text comes from init.lua.
+header() { log fzf.args | grep -A1 -x -- --header | tail -1; }
+run "$three" FZF_URL_HEADER='Enter: Open'
+check_eq "header comes from FZF_URL_HEADER" "Enter: Open" "$(header)"
 
 run "$two" FZF_URL_FZF_OPTIONS='--exact --reverse'
 check_eq "fzf_options are split into words" $'--exact\n--reverse' "$(log fzf.args | tail -2)"

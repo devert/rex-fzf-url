@@ -92,6 +92,26 @@ end
 -- the list scrolls. A URL wider than the popup wraps. setup can change both.
 local max_width, max_height = 0.8, 0.4
 
+-- The layout of the picker. The fzf options in bin/picker.sh set it, so
+-- change these values together with those options.
+local layout = {
+  -- The help text below the prompt. picker.sh gets it in FZF_URL_HEADER.
+  help = "Enter: Open URL / CTRL-Y: Copy to clipboard",
+  -- The blank columns on each side of the longest line. On the left, they
+  -- are --padding 0,0,0,1, the pointer, and the mark for a selected URL.
+  -- On the right, they include the column that fzf keeps for its scroll bar.
+  side_cols = 3,
+  -- The columns of a URL row that hold no URL text: the 3 columns on the
+  -- left, and the scroll bar column on the right.
+  url_cols = 4,
+  -- The columns at the start of each extra row of a wrapped URL, for the
+  -- wrap mark.
+  wrap_cols = 2,
+  -- The rows besides the URL list: the separator line, the prompt, the line
+  -- above the help text (--header-border top), and the help text.
+  extra_rows = 4,
+}
+
 -- Return value if it is a number above 0 and at most 1, else default.
 local function fraction(value, default)
   if type(value) == "number" and value > 0 and value <= 1 then return value end
@@ -120,9 +140,9 @@ end
 
 -- Return what the popups need to know about block_id: the window that holds
 -- it, the range of possible window sizes in cells, and a key for the layout
--- of the window. Rex measures floating pane bounds
--- as fractions of the window, so work out the window size from the size and
--- the rect of each tiled pane in it. An earlier popup can have measured it
+-- of the window. Rex measures floating pane bounds as fractions of the
+-- window, so work out the window size from the size and the rect of each
+-- tiled pane in it. An earlier popup can have measured it
 -- better (see bin/measure.lua). Take that when the layout is the same.
 local function locate(block_id)
   local where = {
@@ -203,42 +223,39 @@ local function popup_bounds(where, cols, rows)
 end
 
 -- Return the rows that fzf needs for the URLs in a pane that is cols
--- columns wide. A URL that is wider than the list wraps: fzf puts cols - 4
--- characters on the first row, and 2 fewer on each next row, which starts
--- with a wrap mark.
+-- columns wide. A URL that is wider than the list wraps: fzf puts the text
+-- width of the list on the first row, and fewer characters on each next
+-- row, which starts with a wrap mark.
 local function list_rows(urls, cols)
-  local text = math.max(cols - 4, 3)
+  local text = math.max(cols - layout.url_cols, layout.wrap_cols + 1)
   local rows = 0
   for _, url in ipairs(urls) do
     if #url <= text then
       rows = rows + 1
     else
-      rows = rows + 1 + math.ceil((#url - text) / (text - 2))
+      rows = rows + 1 + math.ceil((#url - text) / (text - layout.wrap_cols))
     end
   end
   return rows
 end
 
--- Return bounds for the picker, sized to its content: the longest line + 6
--- columns, and the rows of the URL list plus 4 rows for the prompt, the help
--- text, and two border lines. Each line starts 3 columns in, after the left
--- padding, the pointer, and a space. The other 3 columns go on the right, so
--- that the longest line, a URL or the help text, is centered.
--- Rex pads the bottom of a floating pane, so the picker needs no padding
--- row. When max_width makes the pane narrower than a URL, the URL wraps, so
--- count the rows at the fewest columns that the pane can get. Also return
--- the rows of the URL list.
+-- Return bounds for the picker, sized to its content: the longest line with
+-- layout.side_cols blank columns on each side, so that it is centered, and
+-- the rows of the URL list plus layout.extra_rows. Rex pads the bottom of a
+-- floating pane, so the picker needs no padding row. When max_width makes
+-- the pane narrower than a URL, the URL wraps, so count the rows at the
+-- fewest columns that the pane can get. Also return the height for fzf.
 local function picker_bounds(where, urls)
-  local width = #"Enter: Open URL / CTRL-Y: Copy to clipboard"
+  local width = #layout.help
   for _, url in ipairs(urls) do
     if #url > width then width = #url end
   end
-  local rows
-  local bounds = popup_bounds(where, width + 6, function(cols)
-    rows = list_rows(urls, cols)
-    return rows + 4
+  local height
+  local bounds = popup_bounds(where, width + 2 * layout.side_cols, function(cols)
+    height = list_rows(urls, cols) + layout.extra_rows
+    return height
   end)
-  return bounds, rows
+  return bounds, height
 end
 
 -- Show a one-line message in a small floating pane sized to the message.
@@ -315,14 +332,15 @@ function M.setup(opts)
 
       -- Terminal options have no env setting, so env(1) passes the options
       -- to the picker.
-      local bounds, rows = picker_bounds(where, urls)
+      local bounds, height = picker_bounds(where, urls)
       local _, layer_err = open_popup(where, bounds, {
         "env",
         "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
         "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
         "FZF_URL_FZF_OPTIONS=" .. (opts.fzf_options or ""),
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
-        "FZF_URL_LIST_ROWS=" .. rows,
+        "FZF_URL_HEADER=" .. layout.help,
+        "FZF_URL_HEIGHT=" .. height,
         "FZF_URL_CACHE=" .. cache_path,
         "FZF_URL_MEASURE=" .. string.format("%s %s %.6f %.6f",
           where.window_id or "none", where.key, bounds[3], bounds[4]),

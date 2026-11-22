@@ -333,7 +333,7 @@ same_bounds("picker fits a 44-character URL",
   P._picker_bounds(where, { string.rep("x", 44) }), P._popup_bounds(where, 50, 5))
 same_bounds("picker fits the longest URL",
   P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 6))
-H.eq("picker list rows with no wrap", select(2, P._picker_bounds(where, { "https://a.example.com", long })), 2)
+H.eq("picker height with no wrap", select(2, P._picker_bounds(where, { "https://a.example.com", long })), 6)
 
 -- fzf puts cols - 4 characters on the first row of a URL, and 2 fewer on
 -- each next row. These counts come from fzf 0.75 at 30 and 40 columns.
@@ -351,7 +351,8 @@ H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http:/
 -- gets a row for each wrapped part, counted at the fewest columns that the
 -- pane can get.
 local narrow = { cols = { 79.5, 80.5 }, rows = { 39.5, 40.5 } }
-local nb, nrows = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
+local nb, nheight = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
+local nrows = nheight - 4
 local least_cols = select(2, real_size.fraction(#pr + 6, 79.5, 80.5, 0.8))
 H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, least_cols))
 H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
@@ -450,7 +451,8 @@ H.eq("picker gets open_cmd", env(cmd, "FZF_URL_OPEN_CMD"), "firefox")
 H.eq("picker gets copy_cmd", env(cmd, "FZF_URL_COPY_CMD"), "xclip")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
-H.eq("picker gets the list rows", env(cmd, "FZF_URL_LIST_ROWS"), "3")
+H.eq("picker gets the fzf height", env(cmd, "FZF_URL_HEIGHT"), "7")
+H.eq("picker gets the help text", env(cmd, "FZF_URL_HEADER"), "Enter: Open URL / CTRL-Y: Copy to clipboard")
 H.eq("picker popup has no starting size", log.layers[1].layout.options.size, nil)
 H.eq("picker gets no starting rows", env(cmd, "FZF_URL_ROWS"), nil)
 H.ok("picker gets the measure spec", (env(cmd, "FZF_URL_MEASURE") or ""):match("^window:1 %x+ [%d.]+ [%d.]+$"),
