@@ -35,7 +35,8 @@ fake browser 'printf "%s\n" "$*" >>"$LOG/browser"'
 fake sleep 'printf "%s\n" "$*" >>"$LOG/sleep"'
 # `stty size` prints the pane size in $FAKE_STTY. Other stty calls do nothing.
 fake stty '[[ "$1" == size ]] && printf "%s\n" "${FAKE_STTY:-}"; exit 0'
-fake rex 'printf "%s\n" "$*" >>"$LOG/rex"'
+# `rex do` prints the size in $FAKE_WANT, as bin/measure.lua does.
+fake rex 'printf "%s\n" "$*" >>"$LOG/rex"; [[ "$1" == do ]] && printf "%s" "${FAKE_WANT:-}"; exit 0'
 ln -s /usr/bin/nohup "$FAKE/nohup"
 # wait-resize.sh runs `rex do` under perl.
 ln -s /usr/bin/perl "$FAKE/perl"
@@ -141,7 +142,7 @@ run "$three" FZF_URL_HEIGHT=7
 check_eq "height comes from FZF_URL_HEIGHT" "7" "$(height)"
 run "$three"
 check_eq "no height: no --height" "" "$(height)"
-run "$three" FZF_URL_HEIGHT=7 FAKE_STTY="24 80"
+run "$three" FZF_URL_HEIGHT=7 FAKE_STTY="24 80" REX_BLOCK=block:7 FAKE_WANT="30 101"
 check_eq "no resize: no --height" "" "$(height)"
 
 # URLs that wrap get their extra rows at the columns of the pane. At 30

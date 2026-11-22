@@ -57,7 +57,10 @@ check_eq "no block: no rex call" "" "$(log rex)"
 check_eq "no block: waits until a new size stays the same" "11" "$sleeps"
 check_eq "exits 0" "0" "$status"
 run "24 80" --
-check_eq "no block: gives up after 25 tries" "25" "$sleeps"
+check_eq "no block: checks 80x24 for all 25 tries" "25" "$sleeps"
+check_eq "no block: 80x24 that never changes exits 0" "0" "$status"
+run "24 80,24 80,30 100,24 80" --
+check_eq "no block: 80x24 after a change still times out" "25" "$sleeps"
 check_eq "a timeout exits 1" "1" "$status"
 run "30 100" --
 check_eq "no block: a size that stays the same from the start" "9" "$sleeps"
@@ -75,7 +78,7 @@ check_eq "no terminal: no echo change" "" "$(log stty)"
 run "30 100" --
 check_eq "turns echo off, then restores the modes" "-echo
 SAVED" "$(log stty)"
-run "24 80" --
+run "24 80" REX_BLOCK=block:7 FAKE_WANT="30 101" --
 check_eq "restores the modes after a timeout" "-echo
 SAVED" "$(log stty)"
 
@@ -104,6 +107,12 @@ run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="" --
 check_eq "no size printed: waits for a size that stays the same" "10" "$sleeps"
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="error" --
 check_eq "not a size: waits for a size that stays the same" "10" "$sleeps"
+run "24 80" REX_BLOCK=block:7 FAKE_WANT="" --
+check_eq "no size printed: 80x24 that never changes exits 0" "0" "$status"
+# rex do can print other lines. The last line that is a size counts.
+run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT=$'note\n20 70\n30 100\nnil' --
+check_eq "other lines: uses the last size" "1" "$sleeps"
+check_eq "other lines: exits 0" "0" "$status"
 
 # A `rex do` that hangs is stopped after one second, and the wait goes on
 # as when measure.lua prints no size.

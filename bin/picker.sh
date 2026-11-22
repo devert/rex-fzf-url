@@ -24,8 +24,7 @@ set -u
 # Rex doesn't give focus back to the pane that ran the action when a floating
 # pane closes, so do it on every exit. Rex sets REX_BIN_DIR in its panes.
 refocus() {
-    [[ -n "${FZF_URL_SOURCE_BLOCK:-}" ]] &&
-        "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" focus "$FZF_URL_SOURCE_BLOCK" >/dev/null 2>&1
+    [[ -n "${FZF_URL_SOURCE_BLOCK:-}" ]] && "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" focus "$FZF_URL_SOURCE_BLOCK" >/dev/null 2>&1
 }
 trap refocus EXIT
 
@@ -98,8 +97,7 @@ if [[ -n "${FZF_URL_FZF_PATH:-}" ]]; then
     [[ -f "$fzf" && -x "$fzf" ]] || fail "fzf_path is not an executable file: $FZF_URL_FZF_PATH"
 else
     fzf=fzf
-    command -v fzf >/dev/null 2>&1 ||
-        fail "fzf not found. Set fzf_path in setup() to the full path of fzf."
+    command -v fzf >/dev/null 2>&1 || fail "fzf not found. Set fzf_path in setup() to the full path of fzf."
 fi
 
 [[ -z "$urls" ]] && exit 0
