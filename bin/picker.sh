@@ -101,12 +101,16 @@ fi
 # Wait for the app to resize the pane, as fzf draws in place with --height,
 # so lines that it draws before the resize stay on the screen. This also
 # saves the size of the pane (see bin/wait-resize.sh).
-. "${0%/*}/wait-resize.sh"
-wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}"
-
 # With more URLs than fit, fzf limits --height to the pane height, so it
-# fills the pane and scrolls the list. Without a height, fill the pane.
-height=${FZF_URL_HEIGHT:-100%}
+# fills the pane and scrolls the list.
+# When the wait times out, the pane can still change size after fzf starts.
+# Then, and without a height, leave out --height. fzf then uses the whole
+# screen and draws it again after a resize, with no stale lines.
+. "${0%/*}/wait-resize.sh"
+height_args=()
+if wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}" && [[ -n "${FZF_URL_HEIGHT:-}" ]]; then
+    height_args=(--height "$FZF_URL_HEIGHT")
+fi
 
 # --no-border, --no-margin, and --no-padding stop FZF_DEFAULT_OPTS from adding
 # rows that the popup size does not count. Those rows hide part of the URL list.
@@ -126,7 +130,7 @@ selection=$(printf '%s\n' "$urls" | "$fzf" \
     --header-border top --header-first \
     --highlight-line --info inline-right \
     --padding 0,0,0,1 \
-    --height "$height" \
+    ${height_args[@]+"${height_args[@]}"} \
     ${FZF_URL_FZF_OPTIONS:-})
 # fzf exits 1 when nothing matches and 130 on Esc. Any other failure, such as
 # an fzf that is too old for these options, gets a message. fzf prints its

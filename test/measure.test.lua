@@ -117,9 +117,9 @@ calls, sleeps = measure(args(path), { { owner = 2, desired = { other } }, owned 
 H.ok("owner with no size: waits", calls == 2 and sleeps == 1, calls .. " calls, " .. sleeps .. " sleeps")
 os.remove(path)
 
--- No owner for one second: give up, and write nothing.
+-- No owner for half a second: give up, and write nothing.
 calls, sleeps, out = measure(args(path), { { desired = owned.desired } })
-H.ok("never owned: gives up after 100 tries", calls == 100 and sleeps == 100,
+H.ok("never owned: gives up after 50 tries", calls == 50 and sleeps == 50,
   calls .. " calls, " .. sleeps .. " sleeps")
 H.eq("never owned: prints nothing", out, "")
 H.eq("never owned: no cache file", read(path), nil)

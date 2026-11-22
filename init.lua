@@ -208,6 +208,9 @@ end
 -- size to the pane a moment later. Don't give a starting size: the terminal
 -- uses the size that its owner asks for, and the app, which creates and owns
 -- the popup, then keeps that size and doesn't fit the terminal to the pane.
+-- So the terminal also doesn't get the cell size in pixels of the source
+-- pane, and programs that draw images in the popup get the default cell
+-- size. The picker draws no images, so that is fine.
 local function open_popup(where, bounds, command)
   return rex.session.new_layer{
     window_id = where.window_id,
@@ -218,6 +221,13 @@ local function open_popup(where, bounds, command)
       options = { command = command },
     },
   }
+end
+
+-- Return the width of s in columns: the number of UTF-8 characters, not
+-- bytes. Each character takes one column. Wide characters, such as CJK,
+-- take two, but URLs seldom have them.
+local function width_of(s)
+  return #(s:gsub("[\128-\191]", ""))
 end
 
 -- Return centered bounds for a popup whose terminal is cols x rows cells,
@@ -240,10 +250,11 @@ local function list_rows(urls, cols)
   local text = math.max(cols - layout.url_cols, layout.wrap_cols + 1)
   local rows = 0
   for _, url in ipairs(urls) do
-    if #url <= text then
+    local n = width_of(url)
+    if n <= text then
       rows = rows + 1
     else
-      rows = rows + 1 + math.ceil((#url - text) / (text - layout.wrap_cols))
+      rows = rows + 1 + math.ceil((n - text) / (text - layout.wrap_cols))
     end
   end
   return rows
@@ -256,9 +267,9 @@ end
 -- the pane narrower than a URL, the URL wraps, so count the rows at the
 -- fewest columns that the pane can get. Also return the height for fzf.
 local function picker_bounds(where, urls)
-  local width = #layout.help
+  local width = width_of(layout.help)
   for _, url in ipairs(urls) do
-    if #url > width then width = #url end
+    width = math.max(width, width_of(url))
   end
   local height
   local bounds = popup_bounds(where, width + 2 * layout.side_cols, function(cols)
@@ -271,7 +282,7 @@ end
 -- Show a one-line message in a small floating pane sized to the message.
 -- The pane closes after one second, or when you press a key.
 local function show_message(where, message)
-  open_popup(where, popup_bounds(where, #message + 2, 1),
+  open_popup(where, popup_bounds(where, width_of(message) + 2, 1),
     { "bash", plugin_dir .. "/bin/message.sh", message, where.block_id })
 end
 

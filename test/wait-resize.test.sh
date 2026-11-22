@@ -49,7 +49,8 @@ check_eq "no block: no rex call" "" "$(log rex)"
 check_eq "no block: waits until the size changes" "2" "$sleeps"
 check_eq "exits 0" "0" "$status"
 run "24 80" --
-check_eq "no block: gives up after 50 tries" "50" "$sleeps"
+check_eq "no block: gives up after 25 tries" "25" "$sleeps"
+check_eq "a timeout exits 1" "1" "$status"
 run "30 100" --
 check_eq "no block: no wait after the resize" "0" "$sleeps"
 
@@ -59,8 +60,15 @@ check_eq "runs measure.lua with the block" "do $DIR/bin/measure.lua block=block:
 check_eq "waits for the wanted size" "1" "$sleeps"
 run "24 80" REX_BLOCK=block:7 FAKE_WANT="24 80" --
 check_eq "a wanted size of 80x24 needs no wait" "0" "$sleeps"
-run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="30 101" --
+run "24 80" REX_BLOCK=block:7 FAKE_WANT="30 101" --
 check_eq "gives up on the wanted size after 25 tries" "25" "$sleeps"
+check_eq "a timeout on the wanted size exits 1" "1" "$status"
+# The terminal can settle on another size, as when the window changes size.
+run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="30 101" --
+check_eq "another size that stays the same ends the wait" "5" "$sleeps"
+check_eq "another size that stays the same exits 0" "0" "$status"
+run "24 80,30 100,24 80,30 100,30 99" REX_BLOCK=block:7 FAKE_WANT="30 101" --
+check_eq "a size that changes starts the count again" "8" "$sleeps"
 
 # measure.lua prints no size, or something else: wait as with no block.
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="" --

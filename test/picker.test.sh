@@ -132,12 +132,15 @@ check_eq "no HOME: the opener gets HOME" "$(cd ~ && pwd)" "$(log envopen | sed -
 check_eq "no PATH: the opener gets no . in PATH" "/usr/gnu/bin:/usr/local/bin:/bin:/usr/bin:$FAKE" "$(log envopen | sed -n 3p)"
 
 # The fzf height comes from init.lua. fzf itself limits it to the pane
-# height. Without one, fzf fills the pane.
+# height. Without one, or when the pane never got its size, fzf uses the
+# whole screen.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
 run "$three" FZF_URL_HEIGHT=7
 check_eq "height comes from FZF_URL_HEIGHT" "7" "$(height)"
 run "$three"
-check_eq "no height fills the pane" "100%" "$(height)"
+check_eq "no height: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FAKE_STTY="24 80"
+check_eq "no resize: no --height" "" "$(height)"
 
 # The help text comes from init.lua.
 header() { log fzf.args | grep -A1 -x -- --header | tail -1; }

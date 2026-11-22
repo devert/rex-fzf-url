@@ -19,11 +19,11 @@ local block_id, path, spec = rex.args.block, rex.args.cache, rex.args.spec
 if block_id == nil then return end
 
 -- The app can ask for the size of the popup a moment after the popup opens.
--- Wait for the size that the owner asks for, for at most one second. Other
--- clients can ask for other sizes, but the owner's size is the one that
--- the terminal gets.
+-- Wait for the size that the owner asks for, for at most half a second, so
+-- that the popup doesn't stay blank for long. Other clients can ask for
+-- other sizes, but the owner's size is the one that the terminal gets.
 local want
-for _ = 1, 100 do
+for _ = 1, 50 do
   local s = rex.block.call(terminal, "size", { block_id = block_id })
   if s == nil then return end
   if s.owner ~= nil then

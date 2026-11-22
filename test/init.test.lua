@@ -354,6 +354,11 @@ H.eq("list rows: a URL one character too long", P._list_rows({ string.rep("x", 3
 H.eq("list rows: 60 characters at 30 columns", P._list_rows({ pr }, 30), 3)
 H.eq("list rows: 60 characters at 40 columns", P._list_rows({ pr }, 40), 2)
 H.eq("list rows: 120 characters at 30 columns", P._list_rows({ a120 }, 30), 5)
+-- \195\169 is "é": 2 bytes, 1 column.
+local accented = "https://a.example.com/" .. string.rep("\195\169", 14)
+H.eq("list rows: a UTF-8 character counts as one column", P._list_rows({ accented }, 40), 1)
+same_bounds("picker width counts UTF-8 characters, not bytes",
+  P._picker_bounds(where, { accented .. string.rep("\195\169", 20) }), P._popup_bounds(where, 62, 5))
 H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http://localhost:5173/" }, 40), 7)
 
 -- When max_width makes the pane narrower than the longest URL, the picker
