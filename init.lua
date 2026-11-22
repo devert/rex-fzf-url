@@ -97,7 +97,7 @@ end
 
 -- The largest popup, as fractions of the window. With more URLs than fit,
 -- the list scrolls. A URL wider than the popup wraps. setup can change both.
-local max_width, max_height = 0.8, 0.4
+local max_width, max_height = 0.8, 0.5
 
 -- The layout of the picker. The fzf options in bin/picker.sh set it, so
 -- change these values together with those options.

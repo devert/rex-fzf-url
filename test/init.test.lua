@@ -187,7 +187,7 @@ local function limits_after(opts)
 end
 
 local d = limits_after(nil)
-H.ok("default limits", d[1] == 0.8 and d[2] == 0.4 and d[3] == 512 * 1024,
+H.ok("default limits", d[1] == 0.8 and d[2] == 0.5 and d[3] == 512 * 1024,
   table.concat(d, " "))
 
 local l = limits_after{ max_width = 0.6, max_height = 1, max_scrollback = 1000.7 }
@@ -196,7 +196,7 @@ H.ok("valid limits are used", l[1] == 0.6 and l[2] == 1 and l[3] == 1000, table.
 -- Too low, too high, and not a number.
 for _, bad in ipairs({ 0, 1.5, "0.5" }) do
   l = limits_after{ max_width = bad, max_height = bad }
-  H.ok("max_width and max_height ignore " .. tostring(bad), l[1] == 0.8 and l[2] == 0.4,
+  H.ok("max_width and max_height ignore " .. tostring(bad), l[1] == 0.8 and l[2] == 0.5,
     table.concat(l, " "))
 end
 
@@ -333,12 +333,12 @@ local where = { cols = { 149.5, 150.5 }, rows = { 39.5, 40.5 } }
 
 local b = P._popup_bounds(where, 50, 10)
 local fw = real_size.fraction(50, 149.5, 150.5, 0.8)
-local fh = real_size.fraction(10, 39.5, 40.5, 0.4, true)
+local fh = real_size.fraction(10, 39.5, 40.5, 0.5, true)
 H.ok("popup bounds are centered",
   near(b[1], (1 - fw) / 2) and near(b[2], (1 - fh) / 2) and near(b[3], fw) and near(b[4], fh))
 
 b = P._popup_bounds(where, 400, 100)
-H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.4, b[3] .. " " .. b[4])
+H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.5, b[3] .. " " .. b[4])
 
 -- The longest line gets 3 blank columns on each side. The header is 43
 -- characters, so short URLs give 43 + 6 columns.

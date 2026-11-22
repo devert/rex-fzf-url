@@ -190,11 +190,9 @@ EOF
 chmod +x "$work/browser.sh"
 # The demo runs the plugin from this repository, with browser.sh as its
 # open_cmd. rex do defines the action in a script and runs it, so your
-# init.lua and its key binding do not change. With the default max_height
-# of 0.4, a 700-point window is a little too short for the picker to show
-# all four URLs, so the demo allows half of the window.
+# init.lua and its key binding do not change.
 cat >"$work/demo.lua" <<EOF
-dofile([[$repo/init.lua]]).setup{ open_cmd = [[$work/browser.sh]], max_height = 0.5 }
+dofile([[$repo/init.lua]]).setup{ open_cmd = [[$work/browser.sh]] }
 EOF
 run_plugin() { rex do -s "$demo_session" -b "$pane" --action fzf_url "$work/demo.lua" >/dev/null; }
 

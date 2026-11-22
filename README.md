@@ -95,7 +95,7 @@ The picker resets the fzf border, margin, and padding, even when `FZF_DEFAULT_OP
 
 The largest size of the floating pane, as a fraction of the window. A value must be more than 0 and at most 1, or the plugin ignores it. The pane fits its list of URLs and grows up to these limits. A longer list scrolls, and a longer URL wraps.
 
-**Default**: `max_width = 0.8` and `max_height = 0.4`.
+**Default**: `max_width = 0.8` and `max_height = 0.5`.
 
 ### `max_scrollback`
 
