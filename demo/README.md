@@ -24,7 +24,7 @@ The ffmpeg screen input (`avfoundation`) is not used, because it makes the color
 
 - macOS. The script uses `osascript`, and `capture.swift` uses ScreenCaptureKit.
 - The Swift compiler `swiftc`. To install it, run `xcode-select --install`.
-- The Rex app for macOS, build 1853 or later, with this plugin installed and loaded. See the install steps in the main README. An earlier build does not add padding at the bottom of a floating pane, so the picker in the recording has the wrong size.
+- The Rex app for macOS, build 2061 (0.1.0-preview.21) or later, with this plugin installed and loaded. See the install steps in the main README. An earlier build adds a different amount of padding at the bottom of a floating pane, so the picker in the recording has the wrong size.
 - `fzf`, `jq`, `ffmpeg`, and `webp`. The `ffmpeg` formula also installs `ffprobe`, and the `webp` formula installs `img2webp`.
 
 To install the tools with Homebrew, run:

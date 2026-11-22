@@ -41,7 +41,7 @@ Most of the complexity is in sizing the popup to fit its content. Rex places flo
 
 - `lib/popup-size.lua` holds the math and the empirically measured insets (see its header comment for the measurements). It tracks a range `[low, high)` of possible window sizes and picks bounds that fit every size in the range.
 - `locate()` in `init.lua` narrows that range from the size and rect of each tiled pane. If the layout key matches a cached measurement, it merges that too.
-- `bin/picker.sh` runs `bin/measure.lua` in the background via `rex do`. It reads the real size of the popup and saves a tighter range to `$TMPDIR/rex-fzf-url-$USER.v2.sizes`. The next popup in that window then fits exactly. When a change to `lib/popup-size.lua` makes saved ranges wrong, increase the version in that file name in `init.lua`.
+- `bin/picker.sh` runs `bin/measure.lua` in the background via `rex do`. It reads the real size of the popup and saves a tighter range to `$TMPDIR/rex-fzf-url-$USER.v2.sizes`. Later popups in that window then fit more closely. Each popup narrows the range, so wide popups can need a few popups before they fit exactly. When a change to `lib/popup-size.lua` makes saved ranges wrong, increase the version in that file name in `init.lua`.
 - `init.lua` does not give the popup a starting size. The app creates and owns the popup, and the terminal uses the size that its owner asks for. With a starting size, the terminal keeps that size and does not fit the pane. So the terminal starts at 80x24, and `bin/picker.sh` waits for the app to resize it before fzf starts. `list_rows` counts the rows that fzf uses when it wraps long URLs, at the fewest columns that the pane can get.
 
 `init.lua` exports internals as `M._*` for the tests only.

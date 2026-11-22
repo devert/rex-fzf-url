@@ -59,8 +59,8 @@ done
 # fills the pane and scrolls the list. Without a height, fill the pane.
 height=${FZF_URL_HEIGHT:-100%}
 
-# Save the size that the app gives this pane, so that the next popup in this
-# window fits its content exactly. This runs in the background, so fzf starts
+# Save the size that the app gives this pane, so that later popups in this
+# window fit their content more closely. This runs in the background, so fzf starts
 # at once. It doesn't change this pane. Rex sets REX_BLOCK in its panes.
 if [[ -n "${FZF_URL_MEASURE:-}" && -n "${FZF_URL_CACHE:-}" && -n "${REX_BLOCK:-}" ]]; then
     "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "${0%/*}/measure.lua" block="$REX_BLOCK" \
