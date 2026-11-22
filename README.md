@@ -21,7 +21,7 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
 The plugin has only been tested on macOS at this time.
 
 - [Rex](https://www.superlogical.com/rex)
-- [fzf](https://github.com/junegunn/fzf), in the `PATH` of your login shell (the shell that starts in new panes)
+- [fzf](https://github.com/junegunn/fzf)
 - [perl](https://www.perl.org) and [bash](https://www.gnu.org/software/bash/) (macOS includes both)
 
 ## Install
@@ -76,6 +76,12 @@ The command that opens a URL, such as `"open -a Firefox"`.
 The command that copies text to the clipboard, such as `"pbcopy"`.
 
 **Default**: the first of these commands that the plugin finds: `pbcopy`, `wl-copy`, `xclip -selection clipboard`, and `xsel --clipboard --input`.
+
+### `fzf_path`
+
+The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. Set this only when the picker cannot find fzf.
+
+**Default**: the first `fzf` in `PATH` or in the install folders of Homebrew, MacPorts, Nix, mise, and the fzf install script.
 
 ### `fzf_options`
 

@@ -8,6 +8,7 @@
 # Environment, set by init.lua from the setup() options:
 #   FZF_URL_OPEN_CMD     command that opens a URL (default: open or xdg-open)
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
+#   FZF_URL_FZF_PATH     the full path of fzf (default: fzf in PATH)
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
 #   FZF_URL_HEADER       the help text below the prompt
@@ -32,12 +33,62 @@ fail() {
     exit 1
 }
 
-command -v fzf >/dev/null 2>&1 || fail "fzf not found in PATH"
+# Rex starts this pane without a shell, so PATH is the one of the Rex app.
+# An app that starts from Finder gets only the system folders, without the
+# folders that shell startup files add. So add the folders where fzf and
+# other tools are usually installed. They go last, so PATH still wins.
+# FZF_URL_EXTRA_PATH replaces the list, for the tests.
+# An empty part, `.`, or another relative part in PATH finds programs in the
+# current folder. Bash's default PATH, when it starts with no PATH, ends in
+# `.`. So keep only the parts that start with `/`.
+# Export PATH, because bash does not export the default PATH that it sets.
+# nohup and other programs need the folders too.
+# With `set -u`, an unset HOME would stop the script, so get HOME from the
+# user database then. Export it for fzf and the opener.
+export HOME=${HOME:-$(cd ~ 2>/dev/null && pwd)}
+default_extra="/opt/homebrew/bin:/usr/local/bin" # Homebrew
+default_extra+=":/opt/local/bin"                 # MacPorts
+default_extra+=":$HOME/.fzf/bin"                 # the fzf install script
+default_extra+=":$HOME/.local/bin"
+default_extra+=":$HOME/.nix-profile/bin"         # Nix
+default_extra+=":/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-system/sw/bin" # nix-darwin
+default_extra+=":$HOME/.local/share/mise/shims"  # mise
+extra=${FZF_URL_EXTRA_PATH-$default_extra}
+new_path=
+old_ifs=$IFS
+IFS=:
+set -f
+for dir in $PATH:$extra; do
+    case $dir in /*) new_path=${new_path:+$new_path:}$dir ;; esac
+done
+set +f
+IFS=$old_ifs
+export PATH=$new_path
 
+# Read and remove the URL file first, so that no failure leaves it behind.
 url_file="${1:-}"
 [[ -n "$url_file" && -f "$url_file" ]] || fail "no URL list file"
 urls=$(<"$url_file")
 rm -f "$url_file"
+
+if [[ -n "${FZF_URL_FZF_PATH:-}" ]]; then
+    fzf=$FZF_URL_FZF_PATH
+    # Expand only `~` and `~/...`. `~name` is left as it is.
+    case $fzf in '~' | '~/'*) fzf=$HOME${fzf#\~} ;; esac
+    # A name without a slash is a command in PATH. A relative path with a
+    # slash would depend on the folder of this pane, which the user does not
+    # know, so reject it.
+    case $fzf in
+        */*) [[ "$fzf" == /* ]] || fail "fzf_path must start with / or ~/: $FZF_URL_FZF_PATH" ;;
+        *) fzf=$(type -P "$fzf") || fail "fzf_path not found in PATH: $FZF_URL_FZF_PATH" ;;
+    esac
+    [[ -f "$fzf" && -x "$fzf" ]] || fail "fzf_path is not an executable file: $FZF_URL_FZF_PATH"
+else
+    fzf=fzf
+    command -v fzf >/dev/null 2>&1 ||
+        fail "fzf not found. Set fzf_path in setup() to the full path of fzf."
+fi
+
 [[ -z "$urls" ]] && exit 0
 
 # Draw fzf from the top of the pane, as tall as its content. init.lua works
@@ -78,7 +129,7 @@ fi
 # line. The selections follow.
 # $FZF_URL_FZF_OPTIONS is intentionally unquoted: word-splitting is the point.
 # shellcheck disable=SC2086
-selection=$(printf '%s\n' "$urls" | fzf \
+selection=$(printf '%s\n' "$urls" | "$fzf" \
     --multi --no-margin --no-padding --no-border --wrap \
     --expect ctrl-y --style default \
     --header "${FZF_URL_HEADER:-}" \
@@ -86,7 +137,15 @@ selection=$(printf '%s\n' "$urls" | fzf \
     --highlight-line --info inline-right \
     --padding 0,0,0,1 \
     --height "$height" \
-    ${FZF_URL_FZF_OPTIONS:-}) || exit 0
+    ${FZF_URL_FZF_OPTIONS:-})
+# fzf exits 1 when nothing matches and 130 on Esc. Any other failure, such as
+# an fzf that is too old for these options, gets a message. fzf prints its
+# own error above it.
+fzf_status=$?
+if [[ "$fzf_status" -ne 0 ]]; then
+    [[ "$fzf_status" -eq 1 || "$fzf_status" -eq 130 ]] && exit 0
+    fail "fzf failed with exit status $fzf_status"
+fi
 
 key=${selection%%$'\n'*}
 chosen=
