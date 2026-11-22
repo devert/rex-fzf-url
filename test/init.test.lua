@@ -320,8 +320,8 @@ H.ok("popup bounds are centered",
 b = P._popup_bounds(where, 400, 100)
 H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.4, b[3] .. " " .. b[4])
 
--- The header is 43 characters, so short URLs give 43 + 6 columns, which
--- centers the header.
+-- The longest line gets 3 blank columns on each side. The header is 43
+-- characters, so short URLs give 43 + 6 columns.
 local function same_bounds(name, b1, b2)
   H.ok(name, near(b1[3], b2[3]) and near(b1[4], b2[4]),
     string.format("%.4f %.4f and %.4f %.4f", b1[3], b1[4], b2[3], b2[4]))
@@ -329,12 +329,10 @@ end
 same_bounds("picker with short URLs fits the header",
   P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 49, 6))
 local long = "https://example.com/" .. string.rep("x", 60)
-same_bounds("picker keeps the header centered for a 45-character URL",
-  P._picker_bounds(where, { string.rep("x", 45) }), P._popup_bounds(where, 49, 5))
-same_bounds("picker fits a 46-character URL",
-  P._picker_bounds(where, { string.rep("x", 46) }), P._popup_bounds(where, 50, 5))
+same_bounds("picker fits a 44-character URL",
+  P._picker_bounds(where, { string.rep("x", 44) }), P._popup_bounds(where, 50, 5))
 same_bounds("picker fits the longest URL",
-  P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 4, 6))
+  P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 6))
 H.eq("picker list rows with no wrap", select(2, P._picker_bounds(where, { "https://a.example.com", long })), 2)
 
 -- fzf puts cols - 4 characters on the first row of a URL, and 2 fewer on
@@ -354,10 +352,10 @@ H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http:/
 -- pane can get.
 local narrow = { cols = { 79.5, 80.5 }, rows = { 39.5, 40.5 } }
 local nb, nrows = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
-local least_cols = select(2, real_size.fraction(#pr + 4, 79.5, 80.5, 0.8))
+local least_cols = select(2, real_size.fraction(#pr + 6, 79.5, 80.5, 0.8))
 H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, least_cols))
 H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
-same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 4, nrows + 4))
+same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 6, nrows + 4))
 
 ------------------------------------------------------------------------
 -- The fzf_url action
