@@ -21,9 +21,11 @@ if block_id == nil then return end
 -- The app can ask for the size of the popup a moment after the popup opens.
 -- Wait for the size that the owner asks for, with 50 tries 10 ms apart, so
 -- that the popup doesn't stay blank for long. That is about half a second,
--- plus the time that the size calls take. wait-resize.sh stops this script
--- after one second in any case. Other clients can ask for
--- other sizes, but the owner's size is the one that the terminal gets.
+-- plus the time that the size calls take. wait-resize.sh stops `rex do`
+-- after one second, but that stops only the client. This script goes on in
+-- the app, and can still save the size after the popup has drawn. That does
+-- no harm, as the size is still right. Other clients can ask for other
+-- sizes, but the owner's size is the one that the terminal gets.
 local want
 for _ = 1, 50 do
   local s = rex.block.call(terminal, "size", { block_id = block_id })

@@ -43,20 +43,25 @@ run() {
 
 log() { [[ -f "$LOG/$1" ]] && cat "$LOG/$1"; }
 
-# No REX_BLOCK: no measure.lua. Wait while the pane is 80x24.
+# No REX_BLOCK: no measure.lua. Wait for a size other than 80x24 that
+# stays the same for 10 checks.
 run "24 80,24 80,30 100" --
 check_eq "no block: no rex call" "" "$(log rex)"
-check_eq "no block: waits until the size changes" "2" "$sleeps"
+check_eq "no block: waits until a new size stays the same" "11" "$sleeps"
 check_eq "exits 0" "0" "$status"
 run "24 80" --
 check_eq "no block: gives up after 25 tries" "25" "$sleeps"
 check_eq "a timeout exits 1" "1" "$status"
 run "30 100" --
-check_eq "no block: no wait after the resize" "0" "$sleeps"
-# A resize during the last sleep is still found.
-run "$(printf '24 80,%.0s' $(seq 25))30 100" --
-check_eq "no block: checks once more after the last sleep" "0" "$status"
-check_eq "no block: the last check needs no more sleep" "25" "$sleeps"
+check_eq "no block: a size that stays the same from the start" "9" "$sleeps"
+# A size in the middle of a resize does not end the wait.
+run "24 80,30 100,30 100,40 120" --
+check_eq "no block: a size that changes starts the count again" "12" "$sleeps"
+check_eq "no block: ends on the last size" "0" "$status"
+# No terminal: nothing to wait for.
+run "" --
+check_eq "no terminal: no wait" "0" "$sleeps"
+check_eq "no terminal: exits 0" "0" "$status"
 
 # With REX_BLOCK, wait for the size that measure.lua prints.
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="30 100" --
@@ -73,19 +78,23 @@ check_eq "another size that stays the same ends the wait" "10" "$sleeps"
 check_eq "another size that stays the same exits 0" "0" "$status"
 run "24 80,30 100,24 80,30 100,30 99" REX_BLOCK=block:7 FAKE_WANT="30 101" --
 check_eq "a size that changes starts the count again" "13" "$sleeps"
+# A resize during the last sleep is still found.
+run "$(printf '24 80,%.0s' $(seq 25))30 100" REX_BLOCK=block:7 FAKE_WANT="30 100" --
+check_eq "checks once more after the last sleep" "0" "$status"
+check_eq "the last check needs no more sleep" "25" "$sleeps"
 
 # measure.lua prints no size, or something else: wait as with no block.
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="" --
-check_eq "no size printed: waits for any other size" "1" "$sleeps"
+check_eq "no size printed: waits for a size that stays the same" "10" "$sleeps"
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="error" --
-check_eq "not a size: waits for any other size" "1" "$sleeps"
+check_eq "not a size: waits for a size that stays the same" "10" "$sleeps"
 
 # A `rex do` that hangs is stopped after one second, and the wait goes on
 # as when measure.lua prints no size.
 start=$SECONDS
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="30 101" FAKE_HANG=1 --
 check_eq "a hung rex do is stopped" "yes" "$([[ $((SECONDS - start)) -lt 4 ]] && echo yes || echo no)"
-check_eq "a hung rex do: waits for any other size" "1" "$sleeps"
+check_eq "a hung rex do: waits for a size that stays the same" "10" "$sleeps"
 check_eq "a hung rex do: exits 0" "0" "$status"
 
 # The cache and the spec go on to measure.lua only when both are set.

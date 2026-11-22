@@ -37,8 +37,6 @@ fake sleep 'printf "%s\n" "$*" >>"$LOG/sleep"'
 fake stty 'printf "%s\n" "${FAKE_STTY:-}"'
 fake rex 'printf "%s\n" "$*" >>"$LOG/rex"'
 ln -s /usr/bin/nohup "$FAKE/nohup"
-# wait-resize.sh runs `rex do` under perl.
-ln -s /usr/bin/perl "$FAKE/perl"
 for p in sleep rex; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
 
 # picker <file> [VAR=value ...]: run picker.sh on file, with a fresh log.
@@ -152,6 +150,22 @@ run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 26 27 50 51" FAKE_STTY="20 60"
 check_eq "a wider pane wraps fewer rows" "7" "$(height)"
 run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50" FAKE_STTY="20 5"
 check_eq "a pane narrower than the layout keeps 3 text columns" "54" "$(height)"
+# A "w" marks a URL with a wide character, which can lose one column on
+# each row. At 40 columns, a 70-column URL then takes 2 extra rows, not 1.
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 70" FAKE_STTY="20 40"
+check_eq "a URL without wide characters" "6" "$(height)"
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 70w" FAKE_STTY="20 40"
+check_eq "a URL with a wide character loses a column on each row" "7" "$(height)"
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 36w" FAKE_STTY="20 40"
+check_eq "a URL with a wide character that fits takes one row" "5" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 3w" FAKE_STTY="20 5"
+check_eq "a narrow pane keeps one column for each next row" "7" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50w" FAKE_STTY="20 5"
+check_eq "a narrow pane with a wide character loses a column on its first row" "55" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50x" FAKE_STTY="20 30"
+check_eq "a bad wrap mark: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="x 2 50" FAKE_STTY="20 30"
+check_eq "a bad layout value: no --height" "" "$(height)"
 run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 x" FAKE_STTY="20 30"
 check_eq "a bad wrap width: no --height" "" "$(height)"
 run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2" FAKE_STTY="20 30"
@@ -259,5 +273,14 @@ check_eq "fzf_path name not in PATH message" "fzf-url: fzf_path not found in PAT
 picker "$TMP/none"
 check_eq "a missing URL file fails" "1" "$status"
 check_eq "a missing URL file message" "fzf-url: no URL list file" "$err"
+
+# A failure before fzf starts waits for the pane size first, so that the
+# message is not broken by the resize. It does not wait again on exit.
+run "$two" PATH="$NOFZF:/bin" REX_BLOCK=block:7
+check_eq "an early failure waits for the pane size, then focuses" \
+  "do $DIR/bin/measure.lua block=block:7
+focus block:9" "$(log rex)"
+run "$two" FAKE_FZF_EXIT=2 REX_BLOCK=block:7
+check_eq "a late failure does not wait for the size again" "1" "$(grep -c '^do ' "$LOG/rex")"
 
 finish

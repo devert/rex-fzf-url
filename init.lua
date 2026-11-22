@@ -223,18 +223,32 @@ local function open_popup(where, bounds, command)
 end
 
 -- The code points of wide characters, which take two columns: the common
--- ranges of East Asian wide and full-width characters, and emoji.
+-- ranges of East Asian wide and full-width characters, and emoji. Some
+-- ranges also hold a few narrow characters. Counting a narrow character as
+-- wide can only make the popup one column wider or one row taller than it
+-- needs to be, which does no harm.
 local wide = {
-  { 0x1100, 0x115F }, { 0x2E80, 0x303E }, { 0x3041, 0x33FF }, { 0x3400, 0x4DBF },
-  { 0x4E00, 0x9FFF }, { 0xA000, 0xA4CF }, { 0xAC00, 0xD7A3 }, { 0xF900, 0xFAFF },
-  { 0xFE30, 0xFE4F }, { 0xFF00, 0xFF60 }, { 0xFFE0, 0xFFE6 }, { 0x1F300, 0x1F64F },
-  { 0x1F900, 0x1F9FF }, { 0x20000, 0x3FFFD },
+  { 0x1100, 0x115F }, { 0x231A, 0x231B }, { 0x2329, 0x232A }, { 0x23E9, 0x23EC },
+  { 0x23F0, 0x23F0 }, { 0x23F3, 0x23F3 }, { 0x25FD, 0x25FE }, { 0x2614, 0x2615 },
+  { 0x2648, 0x2653 }, { 0x267F, 0x267F }, { 0x2693, 0x2693 }, { 0x26A1, 0x26A1 },
+  { 0x26AA, 0x26AB }, { 0x26BD, 0x26BE }, { 0x26C4, 0x26C5 }, { 0x26CE, 0x26CE },
+  { 0x26D4, 0x26D4 }, { 0x26EA, 0x26EA }, { 0x26F2, 0x26F3 }, { 0x26F5, 0x26F5 },
+  { 0x26FA, 0x26FA }, { 0x26FD, 0x26FD }, { 0x2705, 0x2705 }, { 0x270A, 0x270B },
+  { 0x2728, 0x2728 }, { 0x274C, 0x274C }, { 0x274E, 0x274E }, { 0x2753, 0x2755 },
+  { 0x2757, 0x2757 }, { 0x2795, 0x2797 }, { 0x27B0, 0x27B0 }, { 0x27BF, 0x27BF },
+  { 0x2B1B, 0x2B1C }, { 0x2B50, 0x2B50 }, { 0x2B55, 0x2B55 }, { 0x2E80, 0x303E },
+  { 0x3041, 0x33FF }, { 0x3400, 0x4DBF }, { 0x4E00, 0x9FFF }, { 0xA000, 0xA4CF },
+  { 0xAC00, 0xD7A3 }, { 0xF900, 0xFAFF }, { 0xFE30, 0xFE4F }, { 0xFF00, 0xFF60 },
+  { 0xFFE0, 0xFFE6 }, { 0x1F004, 0x1F004 }, { 0x1F0CF, 0x1F0CF }, { 0x1F18E, 0x1F18E },
+  { 0x1F191, 0x1F19A }, { 0x1F200, 0x1F2FF }, { 0x1F300, 0x1F64F }, { 0x1F680, 0x1F6FF },
+  { 0x1F7E0, 0x1F7EB }, { 0x1F900, 0x1F9FF }, { 0x1FA70, 0x1FAFF }, { 0x20000, 0x3FFFD },
 }
 
--- Return the width of s in columns. A UTF-8 character takes one column, or
--- two when it is wide. Bytes that start no character take no column.
+-- Return the width of s in columns, and true when s has a wide character.
+-- A UTF-8 character takes one column, or two when it is wide. Bytes that
+-- start no character take no column.
 local function width_of(s)
-  local width = 0
+  local width, has_wide = 0, false
   for ch in s:gmatch("[%z\1-\127\192-\255][\128-\191]*") do
     local first = ch:byte(1)
     local cols = 1
@@ -243,12 +257,12 @@ local function width_of(s)
       local cp = first >= 0xF0 and first - 0xF0 or first - 0xE0
       for i = 2, #ch do cp = cp * 64 + ch:byte(i) - 0x80 end
       for _, r in ipairs(wide) do
-        if cp >= r[1] and cp <= r[2] then cols = 2 break end
+        if cp >= r[1] and cp <= r[2] then cols = 2 has_wide = true break end
       end
     end
     width = width + cols
   end
-  return width
+  return width, has_wide
 end
 
 -- Return centered bounds for a popup whose terminal is cols x rows cells,
@@ -269,6 +283,17 @@ local function text_cols(cols)
   return math.max(cols - layout.url_cols, layout.wrap_cols + 1)
 end
 
+-- Return the rows that fzf needs for a URL that is n columns wide, with
+-- text columns on its first row. When a wide character does not fit at the
+-- end of a row, fzf moves it to the next row. So a URL with a wide
+-- character can lose one column on each row. Count that loss on every row,
+-- which can give one row too many, but never too few.
+local function wrapped_rows(n, text, has_wide)
+  if n <= text then return 1 end
+  local loss = has_wide and 1 or 0
+  return 1 + math.ceil((n - text + loss) / math.max(text - layout.wrap_cols - loss, 1))
+end
+
 -- Return the rows that fzf needs for the URLs in a pane that is cols
 -- columns wide. A URL that is wider than the list wraps: fzf puts the text
 -- width of the list on the first row, and fewer characters on each next
@@ -278,12 +303,8 @@ local function list_rows(urls, cols)
   local text = text_cols(cols)
   local rows = 0
   for _, url in ipairs(urls) do
-    local n = width_of(url)
-    if n <= text then
-      rows = rows + 1
-    else
-      rows = rows + 1 + math.ceil((n - text) / (text - layout.wrap_cols))
-    end
+    local n, has_wide = width_of(url)
+    rows = rows + wrapped_rows(n, text, has_wide)
   end
   return rows
 end
@@ -301,14 +322,15 @@ end
 local function picker_bounds(where, urls)
   local width = width_of(layout.help)
   for _, url in ipairs(urls) do
-    width = math.max(width, width_of(url))
+    width = math.max(width, (width_of(url)))
   end
   local wrap = {}
   local bounds = popup_bounds(where, width + 2 * layout.side_cols, function(cols)
     local text = text_cols(cols)
     for _, url in ipairs(urls) do
-      local n = width_of(url)
-      if n > text then wrap[#wrap + 1] = n end
+      -- A "w" after the width marks a URL with a wide character.
+      local n, has_wide = width_of(url)
+      if n > text then wrap[#wrap + 1] = n .. (has_wide and "w" or "") end
     end
     return list_rows(urls, cols) + layout.extra_rows
   end)
@@ -441,6 +463,7 @@ M._locate = locate
 M._popup_bounds = popup_bounds
 M._picker_bounds = picker_bounds
 M._list_rows = list_rows
+M._wrapped_rows = wrapped_rows
 M._width_of = width_of
 M._layout = layout
 M._limits = function() return max_width, max_height, max_scrollback end

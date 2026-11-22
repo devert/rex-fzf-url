@@ -20,6 +20,23 @@ rex config reload              # reload the plugin in a running Rex
 
 The tests do not need Rex. Lua tests replace the `rex` global with a fake table. Bash tests put fake `fzf`, `rex`, clipboard, and opener programs on `PATH`. The layout tests at the end of `test/init.test.lua` are the exception: they run `bin/picker.sh` with real fzf in a detached tmux session, and check the `layout` values in `init.lua` against the screen. They skip when tmux or fzf is missing. If you change the fzf options in `picker.sh`, update `layout` until these tests pass. Each source file has one test file named `<source name>.test.lua` or `.test.sh`. `run.sh` finds tests by that pattern. Each test file must end by printing `N passed, M failed` as its last line (use `H.done()` from `test/harness.lua` or `finish` from `test/harness.sh`), because `run.sh` parses it.
 
+## Test coverage
+
+Each source file must have 100% line coverage. `test/run.sh --coverage` prints a Coverage table with one row for each file. The script does not fail when a file has less than 100%, so you must read the table.
+
+1. After each change to a source file or a test file, run `test/run.sh --coverage`. Plain `test/run.sh` does not measure coverage.
+2. Make sure that each row in the Coverage table shows 100.0%.
+3. If a row shows less than 100.0%, open `test/coverage.html` and find the lines with no hits. Add tests for those lines.
+4. If no test can reach a line, tell the user. Do not remove the line or skip these steps unless the user approves.
+5. Do not say that a change is done until each row shows 100.0%.
+
+If `run.sh` says that the coverage tools are not found, tell the user. To install them, the user runs `test/install-coverage-tools.sh`.
+
+Two bash patterns hide covered lines from kcov:
+
+- kcov reads the trace that bash 3.2 writes to stderr. If you send the stderr of a `{ ... }` group, a subshell, or a function body to `/dev/null`, kcov sees no hits on the lines inside it. Put `2>/dev/null` on each command instead.
+- If a command spans more than one line, bash 3.2 reports only the number of its last line. kcov then sees no hit on its first line. Keep each command on one line. The fzf call in `bin/picker.sh` is the one exception, and `run.sh` leaves its first line out of the count.
+
 ## Compatibility constraints
 
 - Rex runs plugins with plain Lua 5.1. Tests run under LuaJIT, so `test/harness.lua` removes `bit`, `jit`, `ffi`, and similar to catch LuaJIT-only code. Do not use `goto` (the harness cannot catch it).

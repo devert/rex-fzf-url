@@ -393,6 +393,24 @@ H.eq("width: a CJK character takes two columns", P._width_of("https://\228\190\1
 H.eq("width: a full-width letter takes two columns", P._width_of("\239\188\161"), 2)
 H.eq("width: an emoji takes two columns", P._width_of("\240\159\152\128"), 2)
 H.eq("width: a stray continuation byte takes no column", P._width_of("\128a"), 1)
+H.eq("width: a rocket (U+1F680) takes two columns", P._width_of("\240\159\154\128"), 2)
+H.eq("width: a sparkle (U+2728) takes two columns", P._width_of("\226\156\168"), 2)
+H.eq("width: a ninja (U+1F977) takes two columns", P._width_of("\240\159\165\183"), 2)
+H.eq("width: a fly (U+1FAB0) takes two columns", P._width_of("\240\159\170\176"), 2)
+H.eq("width: a sun (U+2600) takes one column", P._width_of("\226\152\128"), 1)
+H.eq("width: ASCII has no wide character", select(2, P._width_of("abc")), false)
+H.eq("width: a CJK character is wide", select(2, P._width_of("\228\190\139")), true)
+
+-- fzf moves a wide character that does not fit at the end of a row to the
+-- next row. So a URL with one can lose a column on each row.
+H.eq("wrapped rows: a URL that fits", P._wrapped_rows(36, 36, true), 1)
+H.eq("wrapped rows: 70 columns without a wide character", P._wrapped_rows(70, 36, false), 2)
+H.eq("wrapped rows: 70 columns with a wide character", P._wrapped_rows(70, 36, true), 3)
+H.eq("wrapped rows: one column for each next row at least", P._wrapped_rows(5, 3, true), 4)
+local rocket = "https://example.com/" .. string.rep("a", 50) .. "\240\159\154\128"
+H.eq("list rows: a URL with a wide character", P._list_rows({ rocket }, 40), P._wrapped_rows(72, 36, true))
+local _, _, rwrap = P._picker_bounds(narrow, { rocket .. string.rep("b", 100) })
+H.eq("picker marks a wrapped URL with a wide character", rwrap[1], "172w")
 
 ------------------------------------------------------------------------
 -- The fzf_url action
@@ -639,6 +657,23 @@ else
     H.eq("layout: the " .. n .. "-character URL starts on the first row", lines[1]:find("https", 1, true) ~= nil, true)
     -- At 40 columns, fzf cuts off the end of the help text.
     H.eq("layout: the help text is on the last row that picker.sh counts",
+      lines[height]:sub(1, side + 6), string.rep(" ", side) .. L.help:sub(1, 6))
+  end
+
+  -- A wide character that does not fit at the end of a row moves to the
+  -- next row. At 40 columns, the first row holds 36 columns, so a rocket
+  -- after 35 columns moves. The counts must still fit the URL.
+  for _, before in ipairs({ 34, 35 }) do
+    local url = "https://example.com/" .. string.rep("a", before - 20) .. "\240\159\154\128" .. string.rep("b", 66)
+    local n = before + 2 + 66
+    local want = P._list_rows({ url }, cols)
+    height = want + L.extra_rows
+    lines = screen({ url }, cols, height + 3, 1 + L.extra_rows,
+      table.concat({ L.url_cols, L.wrap_cols, n .. "w" }, " "))
+    local got = url_rows(lines)
+    H.ok("layout: the rows of a URL with a rocket after " .. before .. " columns fit",
+      got <= want and got >= want - 1, got .. " rows, counted " .. want)
+    H.eq("layout: the help text is on the last row that picker.sh counts, rocket after " .. before,
       lines[height]:sub(1, side + 6), string.rep(" ", side) .. L.help:sub(1, 6))
   end
 end

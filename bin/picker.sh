@@ -15,7 +15,8 @@
 #                        in the layout table of init.lua)
 #   FZF_URL_HEIGHT       the rows that fzf needs, with each URL on one row
 #   FZF_URL_WRAP         "URL_COLS WRAP_COLS WIDTH...": the layout values and
-#                        the widths of the URLs that can wrap
+#                        the widths of the URLs that can wrap. A "w" after
+#                        a width marks a URL with a wide character.
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
 set -u
@@ -28,9 +29,18 @@ refocus() {
 }
 trap refocus EXIT
 
+# wait_resize waits until the app gives the pane its size (see
+# bin/wait-resize.sh).
+. "${0%/*}/wait-resize.sh"
+resized=
+
 # No `set -e`: a pane that closes without a message is hard to debug.
-# Failures print a message and pause so the user can read it.
+# Failures print a message and pause so the user can read it. A message
+# that prints before the pane gets its size can end up broken or out of
+# view, so wait for the size first.
 fail() {
+    [[ -n "$resized" ]] || wait_resize
+    resized=1
     printf 'fzf-url: %s\n' "$1" >&2
     sleep 2
     exit 1
@@ -108,14 +118,16 @@ fi
 # When the wait times out, the pane can still change size after fzf starts.
 # Then, and without a height, leave out --height. fzf then uses the whole
 # screen and draws it again after a resize, with no stale lines.
-. "${0%/*}/wait-resize.sh"
 
 # fzf_height: print the rows that fzf needs in this pane. That is
 # FZF_URL_HEIGHT, plus the extra rows of each URL in FZF_URL_WRAP that wraps
-# at the columns of the pane. This is the count of list_rows in init.lua.
+# at the columns of the pane. This is the count of wrapped_rows in init.lua.
 # Change them together. Return 1 when the height is not known.
+# A "w" after a width marks a URL with a wide character. fzf moves a wide
+# character that does not fit at the end of a row to the next row, so such
+# a URL can lose one column on each row.
 fzf_height() {
-    local height=${FZF_URL_HEIGHT:-} size url_cols wrap_cols text w
+    local height=${FZF_URL_HEIGHT:-} size url_cols wrap_cols text w n loss per
     [[ "$height" =~ ^[0-9]+$ ]] || return 1
     set -f
     # shellcheck disable=SC2086
@@ -124,16 +136,21 @@ fzf_height() {
     if [[ $# -gt 0 ]]; then
         size=$(stty size 2>/dev/null)
         [[ "$size" =~ ^[0-9]+\ [0-9]+$ && $# -ge 3 ]] || return 1
-        for w in "$@"; do [[ "$w" =~ ^[0-9]+$ ]] || return 1; done
         url_cols=$1 wrap_cols=$2
+        [[ "$url_cols" =~ ^[0-9]+$ && "$wrap_cols" =~ ^[0-9]+$ ]] || return 1
         shift 2
+        for w in "$@"; do [[ "$w" =~ ^[0-9]+w?$ ]] || return 1; done
         text=$((${size#* } - url_cols))
         [[ "$text" -gt "$wrap_cols" ]] || text=$((wrap_cols + 1))
-        # A URL of w columns takes ceil((w - text) / (text - wrap_cols))
-        # extra rows.
+        # A URL of n columns takes
+        # ceil((n - text + loss) / (text - wrap_cols - loss)) extra rows.
         for w in "$@"; do
-            if [[ "$w" -gt "$text" ]]; then
-                height=$((height + (w - text + text - wrap_cols - 1) / (text - wrap_cols)))
+            n=${w%w} loss=0
+            [[ "$w" == *w ]] && loss=1
+            if [[ "$n" -gt "$text" ]]; then
+                per=$((text - wrap_cols - loss))
+                [[ "$per" -ge 1 ]] || per=1
+                height=$((height + (n - text + loss + per - 1) / per))
             fi
         done
     fi
@@ -141,6 +158,7 @@ fzf_height() {
 }
 
 height_args=()
+resized=1
 if wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}" && height=$(fzf_height); then
     height_args=(--height "$height")
 fi
