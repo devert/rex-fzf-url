@@ -219,21 +219,24 @@ local function list_rows(urls, cols)
   return rows
 end
 
--- Return bounds for the picker, sized to its content: the longest line + 4
+-- Return bounds for the picker, sized to its content: the longest URL + 4
 -- columns, and the rows of the URL list plus 4 rows for the prompt, the help
 -- text, and two border lines. The 4 columns are the left padding, the
 -- pointer and the space after it, and the scroll bar column on the right.
+-- The help text starts 3 columns in, in line with the URLs. When it is the
+-- widest line, the pane gets 3 blank columns on the right too, so that the
+-- help text is centered.
 -- Rex pads the bottom of a floating pane, so the picker needs no padding
 -- row. When max_width makes the pane narrower than a URL, the URL wraps, so
 -- count the rows at the fewest columns that the pane can get. Also return
 -- the rows of the URL list.
 local function picker_bounds(where, urls)
-  local width = #"Enter: Open URL / CTRL-Y: Copy to clipboard"
+  local width = #"Enter: Open URL / CTRL-Y: Copy to clipboard" + 6
   for _, url in ipairs(urls) do
-    if #url > width then width = #url end
+    if #url + 4 > width then width = #url + 4 end
   end
   local rows
-  local bounds = popup_bounds(where, width + 4, function(cols)
+  local bounds = popup_bounds(where, width, function(cols)
     rows = list_rows(urls, cols)
     return rows + 4
   end)

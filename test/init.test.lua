@@ -320,14 +320,19 @@ H.ok("popup bounds are centered",
 b = P._popup_bounds(where, 400, 100)
 H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.4, b[3] .. " " .. b[4])
 
--- The header is 43 characters, so short URLs give 43 + 4 columns.
+-- The header is 43 characters, so short URLs give 43 + 6 columns, which
+-- centers the header.
 local function same_bounds(name, b1, b2)
   H.ok(name, near(b1[3], b2[3]) and near(b1[4], b2[4]),
     string.format("%.4f %.4f and %.4f %.4f", b1[3], b1[4], b2[3], b2[4]))
 end
 same_bounds("picker with short URLs fits the header",
-  P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 47, 6))
+  P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 49, 6))
 local long = "https://example.com/" .. string.rep("x", 60)
+same_bounds("picker keeps the header centered for a 45-character URL",
+  P._picker_bounds(where, { string.rep("x", 45) }), P._popup_bounds(where, 49, 5))
+same_bounds("picker fits a 46-character URL",
+  P._picker_bounds(where, { string.rep("x", 46) }), P._popup_bounds(where, 50, 5))
 same_bounds("picker fits the longest URL",
   P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 4, 6))
 H.eq("picker list rows with no wrap", select(2, P._picker_bounds(where, { "https://a.example.com", long })), 2)
