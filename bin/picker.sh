@@ -40,6 +40,11 @@ fail() {
 # FZF_URL_EXTRA_PATH replaces the list, for the tests.
 # An empty part in PATH means the current folder, so join only the parts
 # that are not empty.
+# Export PATH, because bash does not export the default PATH that it sets
+# when it starts with no PATH. nohup and other programs need the folders too.
+# With `set -u`, an unset HOME would stop the script, so get HOME from the
+# user database then.
+HOME=${HOME:-$(cd ~ 2>/dev/null && pwd)}
 default_extra="/opt/homebrew/bin:/usr/local/bin" # Homebrew
 default_extra+=":/opt/local/bin"                 # MacPorts
 default_extra+=":$HOME/.fzf/bin"                 # the fzf install script
@@ -49,6 +54,7 @@ default_extra+=":/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-syst
 default_extra+=":$HOME/.local/share/mise/shims"  # mise
 extra=${FZF_URL_EXTRA_PATH-$default_extra}
 PATH=${PATH:+$PATH${extra:+:}}$extra
+export PATH
 
 # Read and remove the URL file first, so that no failure leaves it behind.
 url_file="${1:-}"
@@ -60,10 +66,14 @@ if [[ -n "${FZF_URL_FZF_PATH:-}" ]]; then
     fzf=$FZF_URL_FZF_PATH
     # Expand only `~` and `~/...`. `~name` is left as it is.
     case $fzf in '~' | '~/'*) fzf=$HOME${fzf#\~} ;; esac
-    # A name without a slash is a command in PATH.
-    if [[ "$fzf" != */* ]]; then
-        fzf=$(type -P "$fzf") || fail "fzf_path not found in PATH: $FZF_URL_FZF_PATH"
-    fi
+    # A name without a slash is a command in PATH. A relative path with a
+    # slash would depend on the folder of this pane, which the user does not
+    # know, so reject it.
+    case $fzf in
+        /*) ;;
+        */*) fail "fzf_path must start with / or ~/: $FZF_URL_FZF_PATH" ;;
+        *) fzf=$(type -P "$fzf") || fail "fzf_path not found in PATH: $FZF_URL_FZF_PATH" ;;
+    esac
     [[ -f "$fzf" && -x "$fzf" ]] || fail "fzf_path is not an executable file: $FZF_URL_FZF_PATH"
 else
     fzf=fzf
@@ -136,7 +146,16 @@ selection=$(printf '%s\n' "$urls" | "$fzf" \
     --highlight-line --info inline-right \
     --padding 0,1,0,1 \
     --height "$height" \
-    ${FZF_URL_FZF_OPTIONS:-}) || exit 0
+    ${FZF_URL_FZF_OPTIONS:-})
+# fzf exits 1 when nothing matches and 130 on Esc. Any other failure, such as
+# an fzf that is too old for these options, gets a message. fzf prints its
+# own error above it.
+fzf_status=$?
+case $fzf_status in
+    0) ;;
+    1 | 130) exit 0 ;;
+    *) fail "fzf failed with exit status $fzf_status" ;;
+esac
 
 key=${selection%%$'\n'*}
 chosen=

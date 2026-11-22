@@ -283,16 +283,19 @@ local function extra_args(list)
   return args
 end
 
--- Return v when it is a string, else "". An option of the wrong type is
--- ignored, so that it does not make the action fail.
-local function str(v)
-  if type(v) == "string" then return v end
-  return ""
-end
+-- The options that the picker gets as strings.
+local string_opts = { "open_cmd", "copy_cmd", "fzf_path", "fzf_options" }
 
 -- Define the fzf_url action, and bind opts.key to it when it is set.
 function M.setup(opts)
   opts = opts or {}
+  -- Check the types here, so that a wrong value fails once with a message,
+  -- not on every run of the action.
+  for _, name in ipairs(string_opts) do
+    if opts[name] ~= nil and type(opts[name]) ~= "string" then
+      fail(name .. " must be a string")
+    end
+  end
   local extract_cmd = { "perl", plugin_dir .. "/bin/extract-urls.pl" }
   for _, arg in ipairs(extra_args(opts.extra_patterns)) do
     table.insert(extract_cmd, arg)
@@ -337,10 +340,10 @@ function M.setup(opts)
       local bounds, size, rows = picker_bounds(where, urls)
       local _, layer_err = open_popup(where, bounds, size, {
         "env",
-        "FZF_URL_OPEN_CMD=" .. str(opts.open_cmd),
-        "FZF_URL_COPY_CMD=" .. str(opts.copy_cmd),
-        "FZF_URL_FZF_PATH=" .. str(opts.fzf_path),
-        "FZF_URL_FZF_OPTIONS=" .. str(opts.fzf_options),
+        "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
+        "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
+        "FZF_URL_FZF_PATH=" .. (opts.fzf_path or ""),
+        "FZF_URL_FZF_OPTIONS=" .. (opts.fzf_options or ""),
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
         "FZF_URL_ROWS=" .. size.rows,
         "FZF_URL_LIST_ROWS=" .. rows,

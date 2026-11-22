@@ -108,8 +108,24 @@ run "$two" FAKE_FZF_EXIT=130
 check_eq "escape exits 0" "0" "$status"
 check_eq "escape opens nothing" "" "$(log open)"
 
-run "$two" FAKE_FZF_OUTPUT='\n'
+run "$two" FAKE_FZF_OUTPUT='\n' FAKE_FZF_EXIT=1
+check_eq "enter with no match exits 0" "0" "$status"
 check_eq "enter with no match opens nothing" "" "$(log open)"
+
+run "$two" FAKE_FZF_EXIT=2
+check_eq "fzf error fails" "1" "$status"
+check_eq "fzf error message" "fzf-url: fzf failed with exit status 2" "$err"
+
+# Without HOME, the picker still runs, and the home install folders come
+# from the user database. No PATH: bash sets a default PATH, which the
+# picker exports, so nohup finds the opener.
+LOG=$(mktemp -d "$TMP/log.XXXX")
+printf '%s\n' "$two" >"$TMP/urls"
+env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} LOG="$LOG" FZF_URL_EXTRA_PATH="$FAKE" \
+  FZF_URL_OPEN_CMD=myopen FAKE_FZF_OUTPUT='\nhttps://a.example.com\n' \
+  /bin/bash "$DIR/bin/picker.sh" "$TMP/urls" >/dev/null 2>"$TMP/stderr"
+check_eq "no HOME or PATH exits 0" "0" "$?"
+check_eq "no PATH: open_cmd found in an install folder" "https://a.example.com" "$(log myopen)"
 
 # The fzf height is the rows of the URL list plus 4, at most FZF_URL_ROWS.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
@@ -188,6 +204,9 @@ run "$two" FZF_URL_FZF_PATH="$TMP/home/apps"
 check_eq "fzf_path that is a folder fails" "1" "$status"
 check_eq "fzf_path that is a folder message" \
   "fzf-url: fzf_path is not an executable file: $TMP/home/apps" "$err"
+run "$two" FZF_URL_FZF_PATH="apps/myfzf"
+check_eq "relative fzf_path fails" "1" "$status"
+check_eq "relative fzf_path message" "fzf-url: fzf_path must start with / or ~/: apps/myfzf" "$err"
 run "$two" FZF_URL_FZF_PATH="$TMP/nothing"
 check_eq "fzf_path that is missing fails" "1" "$status"
 check_eq "fzf_path that is missing does not run fzf" "" "$(log fzf.in)"
@@ -198,7 +217,7 @@ mkdir -p "$TMP/home/foo"
 cp "$FAKE/fzf" "$TMP/home/foo/fzf"
 run "$two" PATH="$NOFZF:/bin" HOME="$TMP/home/" FZF_URL_FZF_PATH="~foo/fzf"
 check_eq "fzf_path with ~name is not expanded" "1" "$status"
-check_eq "fzf_path with ~name message" "fzf-url: fzf_path is not an executable file: ~foo/fzf" "$err"
+check_eq "fzf_path with ~name message" "fzf-url: fzf_path must start with / or ~/: ~foo/fzf" "$err"
 
 # A name without a slash is found in PATH.
 run "$two" PATH="$NOFZF:/bin" FZF_URL_EXTRA_PATH="$TMP/home/apps" FZF_URL_FZF_PATH="myfzf"

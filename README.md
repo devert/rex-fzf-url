@@ -21,7 +21,7 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
 The plugin has only been tested on macOS at this time.
 
 - [Rex](https://www.superlogical.com/rex)
-- [fzf](https://github.com/junegunn/fzf), in a folder that the picker searches (see [`fzf_path`](#fzf_path))
+- [fzf](https://github.com/junegunn/fzf)
 - [perl](https://www.perl.org) and [bash](https://www.gnu.org/software/bash/) (macOS includes both)
 
 ## Install
@@ -79,11 +79,9 @@ The command that copies text to the clipboard, such as `"pbcopy"`.
 
 ### `fzf_path`
 
-The path of fzf, such as `"/opt/homebrew/bin/fzf"`. A leading `~/` is your home folder. Set this only when the picker cannot find fzf.
+The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. Set this only when the picker cannot find fzf.
 
-The picker does not get the `PATH` from your shell. So it also searches the usual install folders of Homebrew, MacPorts, Nix, mise, and the fzf install script, after `PATH`. The picker uses the same folders to find `open_cmd`, `copy_cmd`, and a `fzf_path` without a `/`.
-
-**Default**: the first `fzf` in `PATH` or in the install folders.
+**Default**: the first `fzf` in `PATH` or in the install folders of Homebrew, MacPorts, Nix, mise, and the fzf install script.
 
 ### `fzf_options`
 
