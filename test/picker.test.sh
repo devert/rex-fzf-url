@@ -33,11 +33,13 @@ fake xclip 'printf "[%s]" "$*" >>"$LOG/xclip"; cat >>"$LOG/xclip"'
 fake xdg-open 'printf "%s\n" "$*" >>"$LOG/xdg-open"'
 fake browser 'printf "%s\n" "$*" >>"$LOG/browser"'
 fake sleep 'printf "%s\n" "$*" >>"$LOG/sleep"'
-# stty prints the pane size in $FAKE_STTY.
-fake stty 'printf "%s\n" "${FAKE_STTY:-}"'
+# `stty size` prints the pane size in $FAKE_STTY. Other stty calls do nothing.
+fake stty '[[ "$1" == size ]] && printf "%s\n" "${FAKE_STTY:-}"; exit 0'
 fake rex 'printf "%s\n" "$*" >>"$LOG/rex"'
 ln -s /usr/bin/nohup "$FAKE/nohup"
-for p in sleep rex; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
+# wait-resize.sh runs `rex do` under perl.
+ln -s /usr/bin/perl "$FAKE/perl"
+for p in sleep rex stty perl; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
 
 # picker <file> [VAR=value ...]: run picker.sh on file, with a fresh log.
 # Sets $status to its exit status, and $err to the lines of its stderr that
@@ -142,12 +144,20 @@ check_eq "no height: no --height" "" "$(height)"
 run "$three" FZF_URL_HEIGHT=7 FAKE_STTY="24 80"
 check_eq "no resize: no --height" "" "$(height)"
 
-# URLs that can wrap get their extra rows at the columns of the pane. At 30
-# columns, a row holds 26 characters, and each next row 24.
-run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 26 27 50 51" FAKE_STTY="20 30"
+# URLs that wrap get their extra rows at the columns of the pane. At 30
+# columns, a row holds 26 characters, and each next row 24. The widths come
+# widest first.
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 51 50 27 26" FAKE_STTY="20 30"
 check_eq "wrapped URLs add their extra rows" "11" "$(height)"
-run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 26 27 50 51" FAKE_STTY="20 60"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 51 50 27 26" FAKE_STTY="20 60"
 check_eq "a wider pane wraps fewer rows" "7" "$(height)"
+# The count stops at the first URL that does not wrap, so it does not read
+# the widths after it.
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 27 26 x" FAKE_STTY="20 30"
+check_eq "the count stops at the first URL that does not wrap" "8" "$(height)"
+# The count also stops when the height fills the pane.
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 200 200 200" FAKE_STTY="10 40"
+check_eq "the count stops when the height fills the pane" "10" "$(height)"
 run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50" FAKE_STTY="20 5"
 check_eq "a pane narrower than the layout keeps 3 text columns" "54" "$(height)"
 # A "w" marks a URL with a wide character, which can lose one column on

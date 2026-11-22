@@ -21,8 +21,12 @@ local popup_size = dofile(plugin_dir .. "/lib/popup-size.lua")
 -- The number in the name is the version of the size model in
 -- lib/popup-size.lua. Increase it when a change to that model makes the
 -- saved ranges wrong, so that the plugin starts with no saved sizes.
-local cache_path = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
-  .. "/rex-fzf-url-" .. (os.getenv("USER") or "user") .. ".v2.sizes"
+-- When you increase the version, add the old name to old_cache_paths, so
+-- that setup removes the old file.
+local cache_base = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  .. "/rex-fzf-url-" .. (os.getenv("USER") or "user")
+local cache_path = cache_base .. ".v2.sizes"
+local old_cache_paths = { cache_base .. ".sizes" }
 
 -- The most bytes of scrollback to read. setup can change it.
 local max_scrollback = 512 * 1024
@@ -222,11 +226,12 @@ local function open_popup(where, bounds, command)
   }
 end
 
--- The code points of wide characters, which take two columns: the common
--- ranges of East Asian wide and full-width characters, and emoji. Some
--- ranges also hold a few narrow characters. Counting a narrow character as
--- wide can only make the popup one column wider or one row taller than it
--- needs to be, which does no harm.
+-- The code points of wide characters, which take two columns: the Wide and
+-- Fullwidth ranges of EastAsianWidth.txt in Unicode, and emoji. Some ranges
+-- also hold a few narrow characters. Counting a narrow character as wide
+-- can only make the popup one column wider or one row taller than it needs
+-- to be, which does no harm. A wide character that is not in the table
+-- counts as one column, and can make the popup one row too short.
 local wide = {
   { 0x1100, 0x115F }, { 0x231A, 0x231B }, { 0x2329, 0x232A }, { 0x23E9, 0x23EC },
   { 0x23F0, 0x23F0 }, { 0x23F3, 0x23F3 }, { 0x25FD, 0x25FE }, { 0x2614, 0x2615 },
@@ -238,8 +243,9 @@ local wide = {
   { 0x2757, 0x2757 }, { 0x2795, 0x2797 }, { 0x27B0, 0x27B0 }, { 0x27BF, 0x27BF },
   { 0x2B1B, 0x2B1C }, { 0x2B50, 0x2B50 }, { 0x2B55, 0x2B55 }, { 0x2E80, 0x303E },
   { 0x3041, 0x33FF }, { 0x3400, 0x4DBF }, { 0x4E00, 0x9FFF }, { 0xA000, 0xA4CF },
-  { 0xAC00, 0xD7A3 }, { 0xF900, 0xFAFF }, { 0xFE30, 0xFE4F }, { 0xFF00, 0xFF60 },
-  { 0xFFE0, 0xFFE6 }, { 0x1F004, 0x1F004 }, { 0x1F0CF, 0x1F0CF }, { 0x1F18E, 0x1F18E },
+  { 0xA960, 0xA97C }, { 0xAC00, 0xD7A3 }, { 0xF900, 0xFAFF }, { 0xFE10, 0xFE19 },
+  { 0xFE30, 0xFE6B }, { 0xFF00, 0xFF60 }, { 0xFFE0, 0xFFE6 }, { 0x16FE0, 0x16FFF },
+  { 0x17000, 0x18DFF }, { 0x1AFF0, 0x1B2FF }, { 0x1D300, 0x1D35F }, { 0x1F004, 0x1F004 }, { 0x1F0CF, 0x1F0CF }, { 0x1F18E, 0x1F18E },
   { 0x1F191, 0x1F19A }, { 0x1F200, 0x1F2FF }, { 0x1F300, 0x1F64F }, { 0x1F680, 0x1F6FF },
   { 0x1F7E0, 0x1F7EB }, { 0x1F900, 0x1F9FF }, { 0x1FA70, 0x1FAFF }, { 0x20000, 0x3FFFD },
 }
@@ -316,22 +322,29 @@ end
 -- the pane narrower than a URL, the URL wraps, so count the rows at the
 -- fewest columns that the pane can get.
 -- Also return what fzf needs: its height with each URL on one row, and the
--- widths of the URLs that can wrap. The pane can get more columns than the
--- fewest, where those URLs wrap onto fewer rows. So bin/picker.sh adds their
--- extra rows when it knows the columns of the pane.
+-- widths of the widest URLs, widest first. The pane can get more or fewer
+-- columns than the fewest that the plugin expects, for example when the
+-- window changes size. So bin/picker.sh counts the extra rows of wrapped
+-- URLs when it knows the columns of the pane.
+-- Each URL that wraps adds at least one row, and fzf limits its height to
+-- the pane. So when more URLs wrap than the window has rows, the extra
+-- rows change nothing. Only the widest URLs, one for each row that the
+-- window can have, go to bin/picker.sh. A "w" after a width marks a URL
+-- with a wide character.
 local function picker_bounds(where, urls)
   local width = width_of(layout.help)
+  local widths = {}
   for _, url in ipairs(urls) do
-    width = math.max(width, (width_of(url)))
+    local n, has_wide = width_of(url)
+    width = math.max(width, n)
+    widths[#widths + 1] = { n, has_wide }
   end
+  table.sort(widths, function(a, b) return a[1] > b[1] end)
   local wrap = {}
+  for i = 1, math.min(#widths, math.ceil(where.rows[2])) do
+    wrap[i] = widths[i][1] .. (widths[i][2] and "w" or "")
+  end
   local bounds = popup_bounds(where, width + 2 * layout.side_cols, function(cols)
-    local text = text_cols(cols)
-    for _, url in ipairs(urls) do
-      -- A "w" after the width marks a URL with a wide character.
-      local n, has_wide = width_of(url)
-      if n > text then wrap[#wrap + 1] = n .. (has_wide and "w" or "") end
-    end
     return list_rows(urls, cols) + layout.extra_rows
   end)
   return bounds, #urls + layout.extra_rows, wrap
@@ -389,6 +402,9 @@ function M.setup(opts)
   if type(opts.max_scrollback) == "number" and opts.max_scrollback >= 1 then
     max_scrollback = math.floor(opts.max_scrollback)
   end
+  -- Remove the size files of older versions. They do no harm, but nothing
+  -- else removes them.
+  for _, path in ipairs(old_cache_paths) do os.remove(path) end
 
   rex.action{
     name = "fzf_url",
@@ -424,11 +440,7 @@ function M.setup(opts)
       local bounds, height, wrap = picker_bounds(where, urls)
       -- picker.sh gets the layout values that it needs to count the rows
       -- of wrapped URLs, before their widths.
-      if #wrap > 0 then
-        wrap = layout.url_cols .. " " .. layout.wrap_cols .. " " .. table.concat(wrap, " ")
-      else
-        wrap = ""
-      end
+      wrap = layout.url_cols .. " " .. layout.wrap_cols .. " " .. table.concat(wrap, " ")
       local _, layer_err = open_popup(where, bounds, {
         "env",
         "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),

@@ -25,16 +25,35 @@ wait_resize_dir=${BASH_SOURCE[0]%/*}
 # steps of a resize usually take. If measure.lua prints no size, only such
 # a size ends the wait. When stty finds no terminal, there is no size to
 # wait for, so return at once.
+# The terminal does not echo keys during the wait. An echoed key moves the
+# cursor, and fzf then draws one row lower. The keys stay in the input for
+# the script that runs after the wait.
 # Return 0 when the terminal has its new size, and 1 when the wait timed out.
 wait_resize_limit=1
 wait_resize_tries=25
 wait_resize_stable=10
 wait_resize() {
+    local saved status
+    saved=$(stty -g 2>/dev/null)
+    [[ -n "$saved" ]] && stty -echo 2>/dev/null
+    wait_resize_size "$@"
+    status=$?
+    [[ -n "$saved" ]] && stty "$saved" 2>/dev/null
+    return "$status"
+}
+
+# wait_resize_size [CACHE SPEC]: the wait of wait_resize, with the same
+# return status.
+# perl's alarm stops `rex do` after the limit, as macOS has no timeout
+# command, and the --timeout option of rex does not stop a script. The
+# alarm stays on when perl replaces itself with `rex do`, so no other
+# process has to stop it.
+wait_resize_size() {
     local want= size last= same=0 tries=$wait_resize_tries args
     if [[ -n "${REX_BLOCK:-}" ]]; then
         args=("block=$REX_BLOCK")
         [[ -n "${1:-}" && -n "${2:-}" ]] && args+=("cache=$1" "spec=$2")
-        want=$(wait_resize_run "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "$wait_resize_dir/measure.lua" "${args[@]}")
+        want=$(perl -e 'alarm shift; exec @ARGV or exit 127' "$wait_resize_limit" "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "$wait_resize_dir/measure.lua" "${args[@]}" 2>/dev/null)
         [[ "$want" =~ ^[0-9]+\ [0-9]+$ ]] || want=
     fi
     while :; do
@@ -53,23 +72,4 @@ wait_resize() {
         sleep 0.02
         tries=$((tries - 1))
     done
-}
-
-# wait_resize_run COMMAND...: run the command and print its output. Stop it
-# after wait_resize_limit seconds. macOS has no timeout command, so a
-# watchdog in the background sleeps, then stops the command. The watchdog
-# sends its output to /dev/null, so that the command substitution of the
-# caller does not wait for it. It uses /bin/sleep, as the tests replace
-# sleep in PATH. When the command ends first, stop the watchdog. Its sleep
-# then ends on its own.
-# Send stderr to /dev/null for each command, not for the whole function:
-# test coverage reads the trace of bash 3.2 from stderr.
-wait_resize_run() {
-    local pid dog
-    "$@" 2>/dev/null &
-    pid=$!
-    { /bin/sleep "$wait_resize_limit"; kill "$pid" 2>/dev/null; } >/dev/null &
-    dog=$!
-    wait "$pid" 2>/dev/null
-    kill "$dog" 2>/dev/null
 }

@@ -15,8 +15,8 @@
 #                        in the layout table of init.lua)
 #   FZF_URL_HEIGHT       the rows that fzf needs, with each URL on one row
 #   FZF_URL_WRAP         "URL_COLS WRAP_COLS WIDTH...": the layout values and
-#                        the widths of the URLs that can wrap. A "w" after
-#                        a width marks a URL with a wide character.
+#                        the widths of the widest URLs, widest first. A "w"
+#                        after a width marks a URL with a wide character.
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
 set -u
@@ -123,11 +123,11 @@ fi
 # FZF_URL_HEIGHT, plus the extra rows of each URL in FZF_URL_WRAP that wraps
 # at the columns of the pane. This is the count of wrapped_rows in init.lua.
 # Change them together. Return 1 when the height is not known.
-# A "w" after a width marks a URL with a wide character. fzf moves a wide
-# character that does not fit at the end of a row to the next row, so such
-# a URL can lose one column on each row.
+# The widths come widest first. A "w" after a width marks a URL with a wide
+# character. fzf moves a wide character that does not fit at the end of a
+# row to the next row, so such a URL can lose one column on each row.
 fzf_height() {
-    local height=${FZF_URL_HEIGHT:-} size url_cols wrap_cols text w n loss per
+    local height=${FZF_URL_HEIGHT:-} size rows url_cols wrap_cols text w n loss per
     [[ "$height" =~ ^[0-9]+$ ]] || return 1
     set -f
     # shellcheck disable=SC2086
@@ -139,19 +139,23 @@ fzf_height() {
         url_cols=$1 wrap_cols=$2
         [[ "$url_cols" =~ ^[0-9]+$ && "$wrap_cols" =~ ^[0-9]+$ ]] || return 1
         shift 2
-        for w in "$@"; do [[ "$w" =~ ^[0-9]+w?$ ]] || return 1; done
+        rows=${size% *}
         text=$((${size#* } - url_cols))
         [[ "$text" -gt "$wrap_cols" ]] || text=$((wrap_cols + 1))
         # A URL of n columns takes
         # ceil((n - text + loss) / (text - wrap_cols - loss)) extra rows.
         for w in "$@"; do
-            n=${w%w} loss=0
-            [[ "$w" == *w ]] && loss=1
-            if [[ "$n" -gt "$text" ]]; then
-                per=$((text - wrap_cols - loss))
-                [[ "$per" -ge 1 ]] || per=1
-                height=$((height + (n - text + loss + per - 1) / per))
-            fi
+            [[ "$w" =~ ^([0-9]+)(w?)$ ]] || return 1
+            n=${BASH_REMATCH[1]}
+            # The URLs after one that does not wrap are not wider, so they
+            # do not wrap either. fzf limits --height to the pane, so more
+            # rows than the pane has change nothing.
+            [[ "$n" -gt "$text" && "$height" -lt "$rows" ]] || break
+            loss=0
+            [[ -n "${BASH_REMATCH[2]}" ]] && loss=1
+            per=$((text - wrap_cols - loss))
+            [[ "$per" -ge 1 ]] || per=1
+            height=$((height + (n - text + loss + per - 1) / per))
         done
     fi
     echo "$height"

@@ -2,8 +2,9 @@
 # Tests for wait-resize.sh. Must run under macOS /bin/bash 3.2.
 #
 # Fake rex, stty, and sleep programs go first in PATH. rex prints the size
-# in $FAKE_WANT for `rex do`. stty prints the sizes in the file $STTY, one
-# for each call, and then repeats the last one. Each fake logs its calls.
+# in $FAKE_WANT for `rex do`. `stty size` prints the sizes in the file
+# $STTY, one for each call, and then repeats the last one. Each fake logs
+# its calls.
 set -u
 
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,8 +20,14 @@ fake() {
 }
 fake rex 'printf "%s\n" "$*" >>"$LOG/rex"; [[ -n "${FAKE_HANG:-}" ]] && exec /bin/sleep 5; printf "%s" "${FAKE_WANT:-}"'
 fake sleep 'printf "%s\n" "$*" >>"$LOG/sleep"'
-fake stty 'n=$(cat "$LOG/n" 2>/dev/null || echo 0); n=$((n + 1)); echo $n >"$LOG/n"
-line=$(sed -n "${n}p" "$STTY"); [[ -n "$line" ]] || line=$(tail -1 "$STTY"); printf "%s\n" "$line"'
+# `stty -g` prints SAVED, or nothing when FAKE_NOTTY is set. Other stty
+# calls that set modes go to the log.
+fake stty 'case $1 in
+size) n=$(cat "$LOG/n" 2>/dev/null || echo 0); n=$((n + 1)); echo $n >"$LOG/n"
+  line=$(sed -n "${n}p" "$STTY"); [[ -n "$line" ]] || line=$(tail -1 "$STTY"); printf "%s\n" "$line" ;;
+-g) [[ -n "${FAKE_NOTTY:-}" ]] || echo SAVED ;;
+*) printf "%s\n" "$*" >>"$LOG/stty" ;;
+esac'
 
 # run <sizes> [VAR=value ...] -- [ARG ...]: source wait-resize.sh in a bash
 # with fakes, and call wait_resize with the ARGs. sizes is what stty prints
@@ -59,9 +66,18 @@ run "24 80,30 100,30 100,40 120" --
 check_eq "no block: a size that changes starts the count again" "12" "$sleeps"
 check_eq "no block: ends on the last size" "0" "$status"
 # No terminal: nothing to wait for.
-run "" --
+run "" FAKE_NOTTY=1 --
 check_eq "no terminal: no wait" "0" "$sleeps"
 check_eq "no terminal: exits 0" "0" "$status"
+check_eq "no terminal: no echo change" "" "$(log stty)"
+
+# Keys typed during the wait do not echo. The modes come back after it.
+run "30 100" --
+check_eq "turns echo off, then restores the modes" "-echo
+SAVED" "$(log stty)"
+run "24 80" --
+check_eq "restores the modes after a timeout" "-echo
+SAVED" "$(log stty)"
 
 # With REX_BLOCK, wait for the size that measure.lua prints.
 run "24 80,30 100" REX_BLOCK=block:7 FAKE_WANT="30 100" --

@@ -383,8 +383,14 @@ local nrows = P._list_rows({ pr, "http://localhost:5173/" }, least_cols)
 H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
 same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 6, nrows + 4))
 H.eq("narrow picker: fzf height has one row for each URL", nheight, 6)
-H.eq("narrow picker: the wrapped URL goes to fzf", table.concat(nwrap, " "), tostring(#pr))
-H.eq("no wrap: no wrap widths", #select(3, P._picker_bounds(where, { "https://a.example.com" })), 0)
+H.eq("narrow picker: the URL widths go to fzf, widest first", table.concat(nwrap, " "), #pr .. " 22")
+-- Only the widest URLs go to fzf, one for each row that the window can
+-- have: 41 rows here.
+local many = {}
+for i = 1, 50 do many[i] = "https://example.com/" .. string.rep("m", i) end
+local _, _, mwrap = P._picker_bounds(where, many)
+H.eq("picker sends one width for each row of the window", #mwrap, 41)
+H.eq("picker sends the widest first", mwrap[1] .. " " .. mwrap[41], "70 30")
 
 -- Wide characters take two columns.
 H.eq("width: ASCII", P._width_of("abc"), 3)
@@ -398,6 +404,10 @@ H.eq("width: a sparkle (U+2728) takes two columns", P._width_of("\226\156\168"),
 H.eq("width: a ninja (U+1F977) takes two columns", P._width_of("\240\159\165\183"), 2)
 H.eq("width: a fly (U+1FAB0) takes two columns", P._width_of("\240\159\170\176"), 2)
 H.eq("width: a sun (U+2600) takes one column", P._width_of("\226\152\128"), 1)
+H.eq("width: a Kana Supplement character (U+1B001) takes two columns", P._width_of("\240\155\128\129"), 2)
+H.eq("width: a Tangut character (U+17000) takes two columns", P._width_of("\240\151\128\128"), 2)
+H.eq("width: a vertical comma (U+FE10) takes two columns", P._width_of("\239\184\144"), 2)
+H.eq("width: a small comma (U+FE50) takes two columns", P._width_of("\239\185\144"), 2)
 H.eq("width: ASCII has no wide character", select(2, P._width_of("abc")), false)
 H.eq("width: a CJK character is wide", select(2, P._width_of("\228\190\139")), true)
 
@@ -507,7 +517,16 @@ H.eq("picker gets fzf_path", env(cmd, "FZF_URL_FZF_PATH"), "/opt/fzf")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
 H.eq("picker gets the fzf height", env(cmd, "FZF_URL_HEIGHT"), "7")
-H.eq("picker gets no wrap widths for short URLs", env(cmd, "FZF_URL_WRAP"), "")
+H.eq("picker gets the widths of short URLs too", env(cmd, "FZF_URL_WRAP"), "4 2 21 21 21")
+
+-- setup removes the size file of the older version.
+local old_cache = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  .. "/rex-fzf-url-" .. (os.getenv("USER") or "user") .. ".sizes"
+local oc = assert(io.open(old_cache, "w"))
+oc:write("old")
+oc:close()
+action({})
+H.eq("setup removes the old size file", io.open(old_cache), nil)
 H.eq("picker gets the help text", env(cmd, "FZF_URL_HEADER"), "Enter: Open URL / CTRL-Y: Copy to clipboard")
 H.eq("picker popup has no starting size", log.layers[1].layout.options.size, nil)
 H.eq("picker gets no starting rows", env(cmd, "FZF_URL_ROWS"), nil)
