@@ -17,8 +17,9 @@
 # which takes about 30 seconds, and keeps the program for the next runs.
 #
 # Make the Rex window about 1000x700 points first. Do not use the keyboard or
-# mouse while it records (about 30 seconds).
+# mouse while it records (about 40 seconds).
 # The first run asks for Screen Recording permission for Rex.
+# The demo opens a URL in its own Google Chrome window, with an empty profile.
 # The demo copies a URL, so the script saves your clipboard text and puts it
 # back at the end.
 #
@@ -40,6 +41,7 @@ fps=${REX_DEMO_FPS:-25}
 
 die() { printf 'record.sh: %s\n' "$1" >&2; exit 1; }
 
+open -Ra "Google Chrome" 2>/dev/null || die "Google Chrome not found"
 for cmd in rex jq ffmpeg ffprobe img2webp osascript perl swiftc shasum; do
     command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found (brew install ffmpeg webp jq, and xcode-select --install for swiftc)"
 done
@@ -77,6 +79,14 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/rex-fzf-url-demo.XXXXXX")
 saved_clip=$(pbpaste 2>/dev/null || true)
 demo_session=
 
+# Quit the Chrome that the demo started, and put the Rex window in front
+# again. Your own Chrome uses a different profile folder, so it stays open.
+close_browser() {
+    pkill -f "user-data-dir=$work/chrome" 2>/dev/null || true
+    activate_rex
+}
+activate_rex() { osascript -e 'tell application id "com.superlogical.rex" to activate' >/dev/null 2>&1 || true; }
+
 cleanup() {
     status=$?
     [[ -n "${rec_pid:-}" ]] && kill -INT "$rec_pid" 2>/dev/null || true
@@ -84,6 +94,8 @@ cleanup() {
     rex -C "$client" do session.select session_id="$REX_SESSION" \
         window_id="$home_window" >/dev/null 2>&1 || true
     [[ -n "$demo_session" ]] && rex kill "$demo_session" >/dev/null 2>&1 || true
+    close_browser
+    sleep 0.5
     printf '%s' "$saved_clip" | pbcopy
     rm -rf "$work"
     [[ -n "$made_demo_dir" ]] && rmdir "$demo_dir" 2>/dev/null || true
@@ -114,6 +126,16 @@ popup() {
         | [.. | .block_id? // empty][0]' | head -n 1
 }
 has_popup() { [[ -n "$(popup)" ]]; }
+# True when a Chrome window shows the Vite guide. In app mode, the title of
+# the window is the title of the page.
+guide_loaded() {
+    osascript -l JavaScript -e '
+ObjC.import("CoreGraphics");
+const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(
+    $.kCGWindowListOptionOnScreenOnly, $.kCGNullWindowID)));
+list.some(w => w.kCGWindowOwnerName === "Google Chrome" && / \| Vite$/.test(w.kCGWindowName || ""));
+' 2>/dev/null | grep -q true
+}
 no_popup() { [[ -z "$(popup)" ]]; }
 
 wait_for 5 has_prompt || die "the demo shell did not start"
@@ -140,8 +162,8 @@ rex -C "$client" do session.select session_id="$demo_session" >/dev/null
 sleep 4
 
 # Find the Rex window on screen: the largest normal window of the app. The
-# result is the window number and its size in points.
-read -r window_id win_w win_h < <(osascript -l JavaScript -e '
+# result is the window number, its position, and its size in points.
+read -r window_id win_x win_y win_w win_h < <(osascript -l JavaScript -e '
 ObjC.import("CoreGraphics");
 const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(
     $.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements,
@@ -151,9 +173,31 @@ const w = list
     .sort((a, b) => b.kCGWindowBounds.Width * b.kCGWindowBounds.Height
                   - a.kCGWindowBounds.Width * a.kCGWindowBounds.Height)[0];
 const b = w.kCGWindowBounds;
-[w.kCGWindowNumber, Math.round(b.Width), Math.round(b.Height)].join(" ");
+[w.kCGWindowNumber, Math.round(b.X), Math.round(b.Y),
+ Math.round(b.Width), Math.round(b.Height)].join(" ");
 ') || true
 [[ -n "${window_id:-}" ]] || die "the Rex window was not found"
+# The demo opens a URL with Enter. Your own browser would show your tabs,
+# bookmarks, and profile, so the demo opens the URL in its own Chrome: app
+# mode (a window with no toolbar and no tabs), with an empty profile in the
+# work folder, at the place and size of the Rex window.
+cat >"$work/browser.sh" <<EOF
+#!/bin/sh
+exec open -na "Google Chrome" --args --user-data-dir="$work/chrome" \\
+    --no-first-run --no-default-browser-check \\
+    --window-position=$win_x,$win_y --window-size=$win_w,$win_h --app="\$1"
+EOF
+chmod +x "$work/browser.sh"
+# The demo runs the plugin from this repository, with browser.sh as its
+# open_cmd. rex do defines the action in a script and runs it, so your
+# init.lua and its key binding do not change. With the default max_height
+# of 0.4, a 700-point window is a little too short for the picker to show
+# all four URLs, so the demo allows half of the window.
+cat >"$work/demo.lua" <<EOF
+dofile([[$repo/init.lua]]).setup{ open_cmd = [[$work/browser.sh]], max_height = 0.5 }
+EOF
+run_plugin() { rex do -s "$demo_session" -b "$pane" --action fzf_url "$work/demo.lua" >/dev/null; }
+
 printf 'Recording the Rex window (%sx%s points). Do not use the keyboard or mouse.\n' \
     "$win_w" "$win_h" >&2
 
@@ -181,7 +225,7 @@ sleep 1.5
 # Open the plugin while the pane has no URLs. It shows "No URLs found." in a
 # small pane that closes after one second.
 caption "Cmd+U"
-rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
+run_plugin
 wait_for 5 has_popup || die "the message did not open"
 wait_for 5 no_popup || die "the message did not close"
 sleep 0.8
@@ -197,20 +241,36 @@ sleep 1.5
 
 # Open the picker in the demo pane, as the key binding does.
 caption "Cmd+U"
-rex do -s "$demo_session" -b "$pane" fzf_url >/dev/null
+run_plugin
 wait_for 5 has_popup || die "the picker did not open"
 picker=$(popup)
 sleep 1.2
-# The selection starts on the last URL, at the bottom of the list, so move
-# up first.
+# The selection starts on the newest URL, the Vite guide, at the bottom of
+# the list. Move up and back down, and open the guide with Enter.
 key "$picker" up
 sleep 0.5
 key "$picker" up
 sleep 0.5
 key "$picker" down
+sleep 0.5
+key "$picker" down
 sleep 0.8
-# Mark two URLs with Tab, and copy both of them with Ctrl+Y. Clearing the
-# filter moves the selection to the last URL, two rows below localhost.
+caption "Enter"
+key "$picker" enter
+wait_for 5 no_popup || die "the picker did not close"
+wait_for 20 guide_loaded || die "Chrome did not show the Vite guide"
+sleep 2.5
+close_browser
+sleep 1.2
+
+# Open the picker again. Mark two URLs with Tab, and copy both of them with
+# Ctrl+Y. Clearing the filter moves the selection to the last URL, two rows
+# below localhost.
+caption "Cmd+U"
+run_plugin
+wait_for 5 has_popup || die "the picker did not open"
+picker=$(popup)
+sleep 1.2
 type_text "$picker" "pull"
 sleep 0.8
 caption "Tab"

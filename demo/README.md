@@ -24,19 +24,14 @@ The ffmpeg screen input (`avfoundation`) is not used, because it makes the color
 
 - macOS. The script uses `osascript`, and `capture.swift` uses ScreenCaptureKit.
 - The Swift compiler `swiftc`. To install it, run `xcode-select --install`.
-- The Rex app for macOS, build 2061 (0.1.0-preview.21) or later, with this plugin installed and loaded. See the install steps in the main README. An earlier build adds a different amount of padding at the bottom of a floating pane, so the picker in the recording has the wrong size.
+- The Rex app for macOS, build 2061 (0.1.0-preview.21) or later. The script runs the plugin from this repository, so the plugin does not have to be installed.
+- Google Chrome. The demo opens a URL in Chrome. Chrome does not have to be your default browser.
 - `fzf`, `jq`, `ffmpeg`, and `webp`. The `ffmpeg` formula also installs `ffprobe`, and the `webp` formula installs `img2webp`.
 
 To install the tools with Homebrew, run:
 
 ```sh
 brew install fzf jq ffmpeg webp
-```
-
-To make sure that Rex loaded the plugin, run this command. It must print a line for `fzf_url`.
-
-```sh
-rex actions | grep fzf_url
 ```
 
 ## Prepare the window
@@ -62,11 +57,11 @@ osascript -e 'tell application "System Events" to set size of front window of (f
    ```
 
 3. If macOS asks for the Screen Recording permission for Rex, give the permission. If macOS tells you to quit and open Rex again, do that, and then run the script again.
-4. Do not use the keyboard or the mouse until the script prints `Wrote .../docs/demo.webp`. The recording takes about 30 seconds, and the conversion to WebP takes about 20 seconds more.
+4. Do not use the keyboard or the mouse until the script prints `Wrote .../docs/demo.webp`. The recording takes about 40 seconds, and the conversion to WebP takes about 20 seconds more.
 
 The first run compiles `capture.swift`, which takes about 30 seconds more. The script keeps the program in `~/.cache/rex-fzf-url-demo`. If `capture.swift` changes, the script compiles it again.
 
-When the recording stops, the script shows your session again and deletes the demo session. It also puts back the text that was in your clipboard before the demo. It does not keep images or files that were in the clipboard. If the script fails, it also does these steps.
+When the recording stops, the script shows your session again and deletes the demo session. It quits the Chrome that it started, and it puts back the text that was in your clipboard before the demo. It does not keep images or files that were in the clipboard. If the script fails, it also does these steps.
 
 ## How the window is recorded
 
@@ -80,11 +75,25 @@ The screenshot also shows the badge for a short time. `capture.swift` waits two 
 
 The demo shell starts in the folder `/tmp/acme-app`, because Rex shows the path of that folder in the title of the pane. The script makes the folder and deletes it at the end.
 
-First, the script opens the plugin while the demo pane has no URLs, as the key binding does. The plugin shows `No URLs found.` in a small pane that closes after one second. Then the demo pane runs `git push` and `npm run dev`, which print four URLs.
+The script runs the plugin from this repository with `rex do`, as the key binding does. It does not use the plugin that your `init.lua` loads, and it does not change your configuration.
 
-The script opens the plugin again, and it shows the URL list. It moves the selection up and down. Then it types `pull` to filter the list, and marks the pull request URL with `Tab`. It clears the filter with `Ctrl+U`, moves up to the local Vite URL, and marks it with `Tab`. Then it copies both URLs with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the two copied URLs, one on each line.
+First, the script opens the plugin while the demo pane has no URLs. The plugin shows `No URLs found.` in a small pane that closes after one second. Then the demo pane runs `git push` and `npm run dev`, which print four URLs.
 
-The script presses the keys without the keyboard, so the recording shows a caption at the bottom of the window for each key: `Cmd+U` (the key binding from the main README), `Tab`, `Ctrl+U`, and `Ctrl+Y`. Each caption shows for one second. The script uses `osascript` to draw each caption as an image, and `ffmpeg` to put it on the video. The captions are not on the screen while the script records.
+The script opens the plugin again, and it shows the URL list. It moves the selection up and down, back to the Vite guide URL, and opens it with `Enter`. The guide opens in a Chrome window that covers the Rex window. After a few seconds, the script quits that Chrome.
+
+The demo sets the `open_cmd` of the plugin to a script that starts a separate Chrome:
+
+- Chrome starts in app mode, so its window has no toolbar, tabs, or bookmarks.
+- Chrome uses an empty profile in a temporary folder, so the window shows none of your accounts or history. The script deletes the folder at the end.
+- The Chrome window has the same position and size as the Rex window.
+
+Your own Chrome windows stay open, and they do not go into the recording.
+
+The demo also sets `max_height` to 0.5. With the default of 0.4, the picker in a window that is 700 points high shows only three of the four URLs.
+
+The script then opens the plugin a third time. It types `pull` to filter the list, and marks the pull request URL with `Tab`. It clears the filter with `Ctrl+U`, moves up to the local Vite URL, and marks it with `Tab`. Then it copies both URLs with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the two copied URLs, one on each line.
+
+The script presses the keys without the keyboard, so the recording shows a caption at the bottom of the window for each key: `Cmd+U` (the key binding from the main README), `Enter`, `Tab`, `Ctrl+U`, and `Ctrl+Y`. Each caption shows for one second. The script uses `osascript` to draw each caption as an image, and `ffmpeg` to put it on the video. The captions are not on the screen while the script records.
 
 ## Look at the result
 
@@ -124,11 +133,15 @@ If the script stops with `capture.swift did not compile`, install the Swift comp
 
 If the script stops with `capture did not start`, give Rex the Screen Recording permission. You find it in `System Settings > Privacy & Security > Screen Recording`. Then run the script again.
 
-If the script stops with `the picker did not open`, Rex did not load the plugin. Run `rex config reload`, and then run the script again.
+If the script stops with `the picker did not open`, the plugin did not run. Make sure that `fzf` is installed, and run `test/run.sh` to find the problem.
 
 If the script stops with `run this script from a Rex pane`, open a pane in the Rex app, and run the script there.
 
 If the script stops with `the Rex window was not found`, the Rex window is minimized or on a different desktop. Show the window, and then run the script again.
+
+If the script stops with `Google Chrome not found`, install Google Chrome, and then run the script again.
+
+If the script stops with `Chrome did not show the Vite guide`, Chrome did not open https://vite.dev/guide/ in 20 seconds. Make sure that the computer is connected to the internet, and then run the script again.
 
 ## The recording in the main README
 
