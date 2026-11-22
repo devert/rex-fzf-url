@@ -23,9 +23,9 @@ fake() {
 
 # fzf logs its arguments and input, then prints $FAKE_FZF_OUTPUT (with
 # backslash escapes) and exits with $FAKE_FZF_EXIT. With --version, it logs
-# its arguments to fzf.version, and fails when $FAKE_FZF_OLD is set, as an
-# fzf older than 0.63 fails on --no-footer.
-fake fzf 'if [[ " $* " == *" --version "* ]]; then printf "%s\n" "$*" >>"$LOG/fzf.version"; [[ -z "${FAKE_FZF_OLD:-}" ]]; exit; fi
+# its arguments and stdin to fzf.version, and fails when an argument is in
+# $FAKE_FZF_LACKS, as an old fzf fails on a flag that it does not know.
+fake fzf 'if [[ " $* " == *" --version "* ]]; then printf "%s <%s>\n" "$*" "$(cat)" >>"$LOG/fzf.version"; for a in "$@"; do [[ -n "$a" && " ${FAKE_FZF_LACKS:-} " == *" $a "* ]] && exit 2; done; exit 0; fi
 printf "%s\n" "$@" >"$LOG/fzf.args"; cat >"$LOG/fzf.in"; printf "%b" "${FAKE_FZF_OUTPUT:-}"; exit "${FAKE_FZF_EXIT:-0}"'
 fake open 'printf "%s\n" "$*" >>"$LOG/open"'
 fake myopen 'printf "%s\n" "$*" >>"$LOG/myopen"'
@@ -203,11 +203,18 @@ check_eq "no padding when FZF_DEFAULT_OPTS sets one" "--no-padding" "$(log fzf.a
 run "$two" FZF_DEFAULT_OPTS='--preview=echo --header-lines=1 --footer=foot'
 check_eq "no preview when FZF_DEFAULT_OPTS sets one" "--no-preview" "$(log fzf.args | grep -x -- --no-preview)"
 check_eq "no header lines when FZF_DEFAULT_OPTS sets them" "--no-header-lines" "$(log fzf.args | grep -x -- --no-header-lines)"
-check_eq "fzf is asked if it knows --no-footer" "--no-footer --version" "$(log fzf.version)"
+check_eq "fzf is asked once, with no input and no finder, if it knows --no-gap and --no-footer" "--no-gap --no-footer --filter  --version <>" "$(log fzf.version)"
 check_eq "no footer when FZF_DEFAULT_OPTS sets one" "--no-footer" "$(log fzf.args | grep -x -- --no-footer)"
-run "$two" FAKE_FZF_OLD=1 FAKE_FZF_OUTPUT='\nhttps://a.example.com\n'
+run "$two" FZF_DEFAULT_OPTS='--gap'
+check_eq "no gap when FZF_DEFAULT_OPTS sets one" "--no-gap" "$(log fzf.args | grep -x -- --no-gap)"
+run "$two" FAKE_FZF_LACKS=--no-footer FAKE_FZF_OUTPUT='\nhttps://a.example.com\n'
+check_eq "an fzf older than 0.63 is asked again for --no-gap" "2" "$(log fzf.version | wc -l | tr -d ' ')"
+check_eq "an fzf older than 0.63 gets --no-gap" "--no-gap" "$(log fzf.args | grep -x -- --no-gap)"
 check_eq "an fzf older than 0.63 does not get --no-footer" "" "$(log fzf.args | grep -x -- --no-footer)"
 check_eq "an fzf older than 0.63 still opens the URL" "https://a.example.com" "$(log open)"
+run "$two" FAKE_FZF_LACKS='--no-gap --no-footer' FAKE_FZF_OUTPUT='\nhttps://b.example.com\n'
+check_eq "an fzf older than 0.56 gets neither --no-gap nor --no-footer" "" "$(log fzf.args | grep -x -E -- '--no-(gap|footer)')"
+check_eq "an fzf older than 0.56 still opens the URL" "https://b.example.com" "$(log open)"
 
 # Without open, use xdg-open, then $BROWSER.
 mv "$FAKE/open" "$TMP/open"

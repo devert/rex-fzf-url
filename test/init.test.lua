@@ -653,12 +653,15 @@ else
   for _, opts in ipairs({
     "--border --margin=1 --padding=1",
     "--footer=foot",
+    "--gap",
+    "--gap=2 --gap-line",
     "--header-lines=1",
     "--preview=echo --preview-window=down:2",
   }) do
     lines = screen(urls, cols, height, height, nil, opts)
     H.eq("layout: the URLs fill the list rows with FZF_DEFAULT_OPTS=" .. opts, url_rows(lines), #urls)
-    -- A header line is not an item, so fzf counts one URL less.
+    -- A header line is not an item. With --no-header-lines, each URL is
+    -- still an item, so fzf counts #urls/#urls.
     local count = #urls .. "/" .. #urls
     H.eq("layout: each URL is an item with FZF_DEFAULT_OPTS=" .. opts,
       table.concat(lines, "\n"):find(count, 1, true) ~= nil, true)
