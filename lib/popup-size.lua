@@ -20,11 +20,27 @@
 -- keeps its rows. W in rows is then only 0.25 to 1.7 rows more than a full
 -- tiled pane gets. The plugin can't see the sidebar, so the ranges below
 -- hold both cases.
+--
+-- Rex 0.1.0-preview.21 (November 2026) pads the bottom of a floating pane
+-- less. Floating panes from 0.1 to 1.0 of the window, at four window sizes
+-- from 116x29 to 180x40 cells of W, with the sidebar shown and hidden,
+-- found a column inset of 2.01 to 2.14 cells, as before, but a row inset of
+-- only 1.62 to 1.685 rows. A full tiled pane got 0.8 to 2.3 rows less than
+-- W, within the range below.
 
 local M = {}
 
--- The smallest and largest inset of a floating pane, with a margin.
-M.inset_low, M.inset_high = 1.95, 2.25
+-- The smallest and largest inset of a floating pane, with a margin, for
+-- columns and for rows.
+M.inset = {
+  cols = { low = 1.95, high = 2.25 },
+  rows = { low = 1.5, high = 1.8 },
+}
+
+-- Return the inset table for rows when rows is true, else for columns.
+local function inset(rows)
+  return rows and M.inset.rows or M.inset.cols
+end
 
 -- Return the range of window sizes that a tiled pane of n cells allows, when
 -- the pane is a fraction f of the window. rows is true for a height, and
@@ -41,9 +57,11 @@ function M.tiled_range(n, f, rows)
 end
 
 -- Return the range of window sizes that a floating pane of n cells allows,
--- when the pane is a fraction f of the window.
-function M.floating_range(n, f)
-  return (n + M.inset_low) / f, (n + 1 + M.inset_high) / f
+-- when the pane is a fraction f of the window. rows is true for a height,
+-- and false for a width.
+function M.floating_range(n, f, rows)
+  local k = inset(rows)
+  return (n + k.low) / f, (n + 1 + k.high) / f
 end
 
 -- Return the overlap of two ranges, or nil when they don't overlap.
@@ -58,24 +76,25 @@ end
 -- [low, high) and every inset. When no fraction does that, use the smallest
 -- one that gives at least n cells. A cell too many is better than a cell
 -- too few, as fzf would then hide a URL.
-local function fit(n, low, high)
-  local small, large = (n + M.inset_high) / low, (n + 1 + M.inset_low) / high
+local function fit(n, low, high, k)
+  local small, large = (n + k.high) / low, (n + 1 + k.low) / high
   if small < large then return (small + large) / 2 end
-  return (n + M.inset_high + 0.02) / low
+  return (n + k.high + 0.02) / low
 end
 
 -- Return the fraction of the window for a floating pane of n cells, and the
 -- fewest cells that the pane can then get. When n cells take more than max,
 -- use the most cells that fit in max, so that the size of the pane is still
--- known.
-function M.fraction(n, low, high, max)
-  local f = fit(n, low, high)
+-- known. rows is true for a height, and false for a width.
+function M.fraction(n, low, high, max, rows)
+  local k = inset(rows)
+  local f = fit(n, low, high, k)
   while f > max and n > 1 do
     n = n - 1
-    f = fit(n, low, high)
+    f = fit(n, low, high, k)
   end
   f = math.min(f, max)
-  return f, math.max(1, math.floor(f * low - M.inset_high))
+  return f, math.max(1, math.floor(f * low - k.high))
 end
 
 -- Return a short hash of a string, to use in a cache key.

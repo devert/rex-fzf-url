@@ -214,7 +214,7 @@ local function leaf(id, x, y, w, h) return { block_id = id, rect = { x, y, w, h 
 local function split(a, b) return { split = { before = a, after = b } } end
 
 -- Run locate for block_id with the given windows, and sizes by block:
--- { columns, rows } and an optional cell size.
+-- { columns, rows }.
 local function run_locate(block_id, windows, sizes)
   return with_rex({
     session = { view = function() return { windows = windows } end },
@@ -223,7 +223,12 @@ local function run_locate(block_id, windows, sizes)
       local s = sizes[args.block_id]
       if s == nil then return nil end
       if s.old then return { columns = s[1], rows = s[2] } end
-      return { desired = { { columns = s[1], rows = s[2] } }, cell_width_px = s.cw, cell_height_px = s.ch }
+      -- With other, another client comes first and wants another size.
+      if s.other then
+        return { owner = 2, desired = { { client_id = 1, columns = 99, rows = 99 },
+          { client_id = 2, columns = s[1], rows = s[2] } } }
+      end
+      return { desired = { { columns = s[1], rows = s[2] } } }
     end },
   }, function(m) return m._locate(block_id) end)
 end
@@ -237,14 +242,28 @@ end
 fake_cache = {}
 
 local one = { { window_id = "window:1", layers = { { kind = "tiled", layout = leaf("block:1", 0, 0, 1, 1) } } } }
-local w = run_locate("block:1", one, { ["block:1"] = { 150, 40, cw = 8, ch = 16 } })
+local w = run_locate("block:1", one, { ["block:1"] = { 150, 40 } })
 H.eq("one pane: window", w.window_id, "window:1")
 range_is("one pane: columns", w.cols, 151.5, 153.5)
 range_is("one pane: rows", w.rows, 40.1, 43.5)
-H.eq("one pane: cell size", w.cell and w.cell.cell_width_px, 8)
 
 w = run_locate("block:1", one, { ["block:1"] = { 150, 40, old = true } })
 range_is("a server with no desired size", w.cols, 151.5, 153.5)
+
+w = run_locate("block:1", one, { ["block:1"] = { 150, 40, other = true } })
+range_is("another client: the owner's columns", w.cols, 151.5, 153.5)
+range_is("another client: the owner's rows", w.rows, 40.1, 43.5)
+
+-- An owner that wants no size: take the block's own size, not the size
+-- that another client wants.
+w = with_rex({
+  session = { view = function() return { windows = one } end },
+  block = { call = function()
+    return { owner = 2, columns = 150, rows = 40, desired = { { client_id = 1, columns = 99, rows = 99 } } }
+  end },
+}, function(m) return m._locate("block:1") end)
+range_is("owner with no size: the block's columns", w.cols, 151.5, 153.5)
+range_is("owner with no size: the block's rows", w.rows, 40.1, 43.5)
 
 w = run_locate("block:9", one, { ["block:1"] = { 150, 40 } })
 H.eq("unknown block: no window", w.window_id, nil)
@@ -273,7 +292,6 @@ local floating = { { window_id = "window:1", layers = {
 w = run_locate("block:5", floating, { ["block:1"] = { 150, 40 }, ["block:5"] = { 80, 20 } })
 H.eq("floating block: window", w.window_id, "window:1")
 range_is("floating block: tiled columns", w.cols, 151.5, 153.5)
-H.eq("floating block: no cell size from tiled panes", w.cell, nil)
 
 -- Only the window that holds the block counts.
 local windows = {
@@ -311,26 +329,19 @@ fake_cache = {}
 -- popup_bounds and picker_bounds
 
 local P = with_rex({}, function(m) return m end)
-local where = { cols = { 149.5, 150.5 }, rows = { 39.5, 40.5 }, cell = { cell_width_px = 8, cell_height_px = 16 } }
+local where = { cols = { 149.5, 150.5 }, rows = { 39.5, 40.5 } }
 
-local b, s = P._popup_bounds(where, 50, 10)
-local fw, start_cols = real_size.fraction(50, 149.5, 150.5, 0.8)
-local fh, start_rows = real_size.fraction(10, 39.5, 40.5, 0.4)
+local b = P._popup_bounds(where, 50, 10)
+local fw = real_size.fraction(50, 149.5, 150.5, 0.8)
+local fh = real_size.fraction(10, 39.5, 40.5, 0.4, true)
 H.ok("popup bounds are centered",
   near(b[1], (1 - fw) / 2) and near(b[2], (1 - fh) / 2) and near(b[3], fw) and near(b[4], fh))
-H.ok("popup starting size", s.columns == start_cols and s.rows == start_rows,
-  s.columns .. "x" .. s.rows)
-H.ok("popup keeps the cell size", s.cell_width_px == 8 and s.cell_height_px == 16)
 
 b = P._popup_bounds(where, 400, 100)
 H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.4, b[3] .. " " .. b[4])
 
-for _, cell in ipairs({ { cell_width_px = 0, cell_height_px = 16 }, { cell_width_px = 8 } }) do
-  s = select(2, P._popup_bounds({ cols = where.cols, rows = where.rows, cell = cell }, 50, 10))
-  H.ok("popup skips a cell size that is not complete", s.cell_width_px == nil and s.cell_height_px == nil)
-end
-
--- The header is 43 characters, so short URLs give 43 + 6 columns.
+-- The longest line gets 3 blank columns on each side. The header is 43
+-- characters, so short URLs give 43 + 6 columns.
 local function same_bounds(name, b1, b2)
   H.ok(name, near(b1[3], b2[3]) and near(b1[4], b2[4]),
     string.format("%.4f %.4f and %.4f %.4f", b1[3], b1[4], b2[3], b2[4]))
@@ -338,30 +349,78 @@ end
 same_bounds("picker with short URLs fits the header",
   P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 49, 6))
 local long = "https://example.com/" .. string.rep("x", 60)
+same_bounds("picker fits a 44-character URL",
+  P._picker_bounds(where, { string.rep("x", 44) }), P._popup_bounds(where, 50, 5))
 same_bounds("picker fits the longest URL",
   P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 6))
-H.eq("picker list rows with no wrap", select(3, P._picker_bounds(where, { "https://a.example.com", long })), 2)
+H.eq("picker height with no wrap", select(2, P._picker_bounds(where, { "https://a.example.com", long })), 6)
 
--- fzf puts cols - 5 characters on the first row of a URL, and 2 fewer on
--- each next row. These counts come from fzf at 30 and 40 columns.
+-- fzf puts cols - 4 characters on the first row of a URL, and 2 fewer on
+-- each next row. These counts come from fzf 0.75 at 30 and 40 columns.
 local pr = "https://github.com/acme/acme-app/pull/new/fix-login-redirect"
 local a120 = "https://example.com/" .. string.rep("a", 100)
 H.eq("list rows: short URLs", P._list_rows({ "https://a.example.com", "http://localhost:5173/" }, 40), 2)
-H.eq("list rows: a URL that fits exactly", P._list_rows({ string.rep("x", 35) }, 40), 1)
-H.eq("list rows: a URL one character too long", P._list_rows({ string.rep("x", 36) }, 40), 2)
+H.eq("list rows: a URL that fits exactly", P._list_rows({ string.rep("x", 36) }, 40), 1)
+H.eq("list rows: a URL one character too long", P._list_rows({ string.rep("x", 37) }, 40), 2)
 H.eq("list rows: 60 characters at 30 columns", P._list_rows({ pr }, 30), 3)
 H.eq("list rows: 60 characters at 40 columns", P._list_rows({ pr }, 40), 2)
-H.eq("list rows: 120 characters at 30 columns", P._list_rows({ a120 }, 30), 6)
+H.eq("list rows: 120 characters at 30 columns", P._list_rows({ a120 }, 30), 5)
+-- \195\169 is "é": 2 bytes, 1 column.
+local accented = "https://a.example.com/" .. string.rep("\195\169", 14)
+H.eq("list rows: a UTF-8 character counts as one column", P._list_rows({ accented }, 40), 1)
+same_bounds("picker width counts UTF-8 characters, not bytes",
+  P._picker_bounds(where, { accented .. string.rep("\195\169", 20) }), P._popup_bounds(where, 62, 5))
 H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http://localhost:5173/" }, 40), 7)
 
 -- When max_width makes the pane narrower than the longest URL, the picker
 -- gets a row for each wrapped part, counted at the fewest columns that the
--- pane can get.
+-- pane can get. fzf gets the height with each URL on one row, and the
+-- widths of the URLs that wrap at those columns.
 local narrow = { cols = { 79.5, 80.5 }, rows = { 39.5, 40.5 } }
-local nb, ns, nrows = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
-H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, ns.columns))
+local nb, nheight, nwrap = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
+local least_cols = select(2, real_size.fraction(#pr + 6, 79.5, 80.5, 0.8))
+local nrows = P._list_rows({ pr, "http://localhost:5173/" }, least_cols)
 H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
 same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 6, nrows + 4))
+H.eq("narrow picker: fzf height has one row for each URL", nheight, 6)
+H.eq("narrow picker: the URL widths go to fzf, widest first", table.concat(nwrap, " "), #pr .. " 22")
+-- Only the widest URLs go to fzf, one for each row that the window can
+-- have: 41 rows here.
+local many = {}
+for i = 1, 50 do many[i] = "https://example.com/" .. string.rep("m", i) end
+local _, _, mwrap = P._picker_bounds(where, many)
+H.eq("picker sends one width for each row of the window", #mwrap, 41)
+H.eq("picker sends the widest first", mwrap[1] .. " " .. mwrap[41], "70 30")
+
+-- Wide characters take two columns.
+H.eq("width: ASCII", P._width_of("abc"), 3)
+H.eq("width: é takes one column", P._width_of("\195\169"), 1)
+H.eq("width: a CJK character takes two columns", P._width_of("https://\228\190\139.jp"), 13)
+H.eq("width: a full-width letter takes two columns", P._width_of("\239\188\161"), 2)
+H.eq("width: an emoji takes two columns", P._width_of("\240\159\152\128"), 2)
+H.eq("width: a stray continuation byte takes no column", P._width_of("\128a"), 1)
+H.eq("width: a rocket (U+1F680) takes two columns", P._width_of("\240\159\154\128"), 2)
+H.eq("width: a sparkle (U+2728) takes two columns", P._width_of("\226\156\168"), 2)
+H.eq("width: a ninja (U+1F977) takes two columns", P._width_of("\240\159\165\183"), 2)
+H.eq("width: a fly (U+1FAB0) takes two columns", P._width_of("\240\159\170\176"), 2)
+H.eq("width: a sun (U+2600) takes one column", P._width_of("\226\152\128"), 1)
+H.eq("width: a Kana Supplement character (U+1B001) takes two columns", P._width_of("\240\155\128\129"), 2)
+H.eq("width: a Tangut character (U+17000) takes two columns", P._width_of("\240\151\128\128"), 2)
+H.eq("width: a vertical comma (U+FE10) takes two columns", P._width_of("\239\184\144"), 2)
+H.eq("width: a small comma (U+FE50) takes two columns", P._width_of("\239\185\144"), 2)
+H.eq("width: ASCII has no wide character", select(2, P._width_of("abc")), false)
+H.eq("width: a CJK character is wide", select(2, P._width_of("\228\190\139")), true)
+
+-- fzf moves a wide character that does not fit at the end of a row to the
+-- next row. So a URL with one can lose a column on each row.
+H.eq("wrapped rows: a URL that fits", P._wrapped_rows(36, 36, true), 1)
+H.eq("wrapped rows: 70 columns without a wide character", P._wrapped_rows(70, 36, false), 2)
+H.eq("wrapped rows: 70 columns with a wide character", P._wrapped_rows(70, 36, true), 3)
+H.eq("wrapped rows: one column for each next row at least", P._wrapped_rows(5, 3, true), 4)
+local rocket = "https://example.com/" .. string.rep("a", 50) .. "\240\159\154\128"
+H.eq("list rows: a URL with a wide character", P._list_rows({ rocket }, 40), P._wrapped_rows(72, 36, true))
+local _, _, rwrap = P._picker_bounds(narrow, { rocket .. string.rep("b", 100) })
+H.eq("picker marks a wrapped URL with a wide character", rwrap[1], "172w")
 
 ------------------------------------------------------------------------
 -- The fzf_url action
@@ -380,7 +439,8 @@ local function action(opts, fake)
       view = function() return { windows = one } end,
       new_layer = function(spec)
         log.layers[#log.layers + 1] = spec
-        return fake.layer, fake.layer_err
+        if fake.layer_err then return nil, fake.layer_err end
+        return fake.layer or { block_ids = { "block:popup" .. #log.layers } }
       end,
     },
     block = { call = function(_, method)
@@ -437,6 +497,7 @@ H.ok("no URLs shows the message",
   msg[1] == "bash" and msg[2]:match("/bin/message%.sh$") and msg[3] == "No URLs found." and msg[4] == "block:1")
 H.ok("message popup is in the window and has focus",
   log.layers[1].window_id == "window:1" and log.layers[1].focus == true)
+H.eq("message popup has no starting size", log.layers[1].layout.options.size, nil)
 
 -- URLs: the picker gets them newest first, and the options.
 def, log = action({ open_cmd = "firefox", copy_cmd = "xclip", fzf_path = "/opt/fzf", fzf_options = "--exact" },
@@ -455,10 +516,32 @@ H.eq("picker gets copy_cmd", env(cmd, "FZF_URL_COPY_CMD"), "xclip")
 H.eq("picker gets fzf_path", env(cmd, "FZF_URL_FZF_PATH"), "/opt/fzf")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
-H.eq("picker gets the list rows", env(cmd, "FZF_URL_LIST_ROWS"), "3")
-H.eq("picker gets the starting rows", env(cmd, "FZF_URL_ROWS"), tostring(log.layers[1].layout.options.size.rows))
+H.eq("picker gets the fzf height", env(cmd, "FZF_URL_HEIGHT"), "7")
+H.eq("picker gets the widths of short URLs too", env(cmd, "FZF_URL_WRAP"), "4 2 21 21 21")
+
+-- setup removes the size file of the older version.
+local old_cache = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
+  .. "/rex-fzf-url-" .. (os.getenv("USER") or "user") .. ".sizes"
+local oc = assert(io.open(old_cache, "w"))
+oc:write("old")
+oc:close()
+action({})
+H.eq("setup removes the old size file", io.open(old_cache), nil)
+H.eq("picker gets the help text", env(cmd, "FZF_URL_HEADER"), "Enter: Open URL / CTRL-Y: Copy to clipboard")
+H.eq("picker popup has no starting size", log.layers[1].layout.options.size, nil)
+H.eq("picker gets no starting rows", env(cmd, "FZF_URL_ROWS"), nil)
 H.ok("picker gets the measure spec", (env(cmd, "FZF_URL_MEASURE") or ""):match("^window:1 %x+ [%d.]+ [%d.]+$"),
   env(cmd, "FZF_URL_MEASURE"))
+
+-- A URL wider than the largest popup can wrap, so the picker gets its width
+-- after the layout values.
+local wide_url = "https://example.com/" .. string.rep("w", 180)
+def, log = action({}, { exec = { ok = true, stdout = wide_url .. "\n" } })
+def.run({ block_id = "block:1" }, {})
+cmd = command(log)
+os.remove(cmd[#cmd])
+H.eq("picker gets the width of a URL that can wrap", env(cmd, "FZF_URL_WRAP"), "4 2 200")
+H.eq("picker gets the height with the URL on one row", env(cmd, "FZF_URL_HEIGHT"), "5")
 
 def, log = action({}, { exec = { ok = true, stdout = "https://a.example.com\n" } })
 def.run({ block_id = "block:1" }, {})
@@ -477,5 +560,141 @@ def, log = action({}, { exec = { ok = true, stdout = "https://a.example.com\n" }
 H.raises("popup fails to open", "fzf-url: no window", def.run, { block_id = "block:1" }, {})
 cmd = command(log)
 H.eq("URL file is removed when the popup fails", io.open(cmd[#cmd]), nil)
+
+------------------------------------------------------------------------
+-- The layout values against real fzf
+--
+-- Run bin/picker.sh with real fzf in a detached tmux session of a set
+-- size, and read the screen. This catches an fzf version or a change to the
+-- fzf options in picker.sh that draws the picker differently from what the
+-- layout table in init.lua says. Skip it when tmux or fzf is missing.
+
+local function sh(cmd)
+  local r = os.execute(cmd)
+  return r == 0 or r == true
+end
+
+-- Quote s for the shell.
+local function q(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+-- The number of characters in a UTF-8 string.
+local function chars(s) return select(2, s:gsub("[^\128-\191]", "")) end
+
+-- Run picker.sh on urls in a tmux pane of cols x rows. Return the lines of
+-- the screen, without blank space at the end of each line.
+local function screen(urls, cols, rows, height, wrap)
+  local file = os.tmpname()
+  local f = assert(io.open(file, "w"))
+  f:write(table.concat(urls, "\n"), "\n")
+  f:close()
+  -- A socket path of the test's own, so that it can remove the socket file,
+  -- which kill-server leaves behind.
+  local socket = os.tmpname()
+  os.remove(socket)
+  local tmux = "tmux -S " .. q(socket) .. " -f /dev/null "
+  -- Clear the fzf options of the user, which change the layout. Clear
+  -- REX_BLOCK, so that the picker does not wait for the size of the Rex pane
+  -- that runs the tests.
+  sh(tmux .. "new-session -d -x " .. cols .. " -y " .. rows .. " " .. q(table.concat({
+    "env", "FZF_URL_HEADER=" .. q(P._layout.help), "FZF_URL_HEIGHT=" .. height,
+    "FZF_URL_WRAP=" .. q(wrap or ""), "FZF_DEFAULT_OPTS=", "FZF_DEFAULT_OPTS_FILE=", "REX_BLOCK=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
+  }, " ")))
+  local text = ""
+  for _ = 1, 50 do
+    local p = io.popen(tmux .. "capture-pane -p 2>/dev/null")
+    text = p:read("*a")
+    p:close()
+    if text:find("%d+/%d+") then break end -- the match count, as in 3/3
+    sh("sleep 0.05")
+  end
+  sh(tmux .. "kill-server 2>/dev/null")
+  os.remove(socket)
+  os.remove(file)
+  local lines = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do lines[#lines + 1] = (line:gsub("%s+$", "")) end
+  -- When tmux or fzf fails, the capture is empty. Pad the screen with blank
+  -- lines, so that the checks fail instead of the test file stopping.
+  for i = #lines + 1, rows do lines[i] = "" end
+  return lines
+end
+
+-- Return the number of rows with text above the first separator line: the
+-- URL rows. The list area can have blank rows above them.
+local function url_rows(lines)
+  local n = 0
+  for _, line in ipairs(lines) do
+    if line:find("^%s*\226\148\128") then break end -- a line of box-drawing dashes
+    if line:find("%S") then n = n + 1 end
+  end
+  return n
+end
+
+if not (sh("command -v tmux >/dev/null 2>&1") and sh("command -v fzf >/dev/null 2>&1")) then
+  print("skip: the layout tests need tmux and fzf")
+else
+  local L = P._layout
+  local side = L.side_cols
+
+  -- Short URLs: the help text is the longest line.
+  local urls = { "https://a.example.com/one", "https://b.example.com/two", "https://c.example.com" }
+  local cols = #L.help + 2 * side
+  local height = P._list_rows(urls, cols) + L.extra_rows
+  local lines = screen(urls, cols, height, height)
+  H.eq("layout: fzf uses the rows of the list plus extra_rows", lines[height]:match("%S") ~= nil, true)
+  H.eq("layout: the URLs fill the list rows", url_rows(lines), #urls)
+  H.eq("layout: the help text is the last row and is not cut off",
+    lines[height], string.rep(" ", side) .. L.help)
+  H.eq("layout: the help text has side_cols blank columns on the right",
+    cols - chars(lines[height]), side)
+
+  -- A URL longer than the help text: it is the longest line.
+  local long = "https://example.com/" .. string.rep("a", 50)
+  cols = #long + 2 * side
+  height = P._list_rows({ long }, cols) + L.extra_rows
+  lines = screen({ long }, cols, height, height)
+  H.eq("layout: a URL that is the longest line fits on one row", url_rows(lines), 1)
+  H.eq("layout: the longest URL has side_cols blank columns on the right", cols - chars(lines[1]), side)
+  H.eq("layout: the longest URL starts after side_cols columns", lines[1]:sub(-#long), long)
+
+  -- URLs at the wrap width and longer: list_rows counts the rows that fzf
+  -- uses, which tests url_cols and wrap_cols.
+  cols = 40
+  for _, n in ipairs({ cols - L.url_cols, cols - L.url_cols + 1, 100 }) do
+    local url = "https://example.com/" .. string.rep("b", n - 20)
+    local want = P._list_rows({ url }, cols)
+    height = want + L.extra_rows
+    lines = screen({ url }, cols, height, height)
+    H.eq("layout: a " .. n .. "-character URL at " .. cols .. " columns takes " .. want .. " rows",
+      url_rows(lines), want)
+
+    -- picker.sh counts the same rows from FZF_URL_WRAP at the pane width.
+    -- The pane is taller than that, so a count that is too high shows as
+    -- blank rows above the URL, and one that is too low cuts off the help.
+    lines = screen({ url }, cols, height + 3, 1 + L.extra_rows,
+      table.concat({ L.url_cols, L.wrap_cols, n }, " "))
+    H.eq("layout: picker.sh counts the rows of a " .. n .. "-character URL", url_rows(lines), want)
+    H.eq("layout: the " .. n .. "-character URL starts on the first row", lines[1]:find("https", 1, true) ~= nil, true)
+    -- At 40 columns, fzf cuts off the end of the help text.
+    H.eq("layout: the help text is on the last row that picker.sh counts",
+      lines[height]:sub(1, side + 6), string.rep(" ", side) .. L.help:sub(1, 6))
+  end
+
+  -- A wide character that does not fit at the end of a row moves to the
+  -- next row. At 40 columns, the first row holds 36 columns, so a rocket
+  -- after 35 columns moves. The counts must still fit the URL.
+  for _, before in ipairs({ 34, 35 }) do
+    local url = "https://example.com/" .. string.rep("a", before - 20) .. "\240\159\154\128" .. string.rep("b", 66)
+    local n = before + 2 + 66
+    local want = P._list_rows({ url }, cols)
+    height = want + L.extra_rows
+    lines = screen({ url }, cols, height + 3, 1 + L.extra_rows,
+      table.concat({ L.url_cols, L.wrap_cols, n .. "w" }, " "))
+    local got = url_rows(lines)
+    H.ok("layout: the rows of a URL with a rocket after " .. before .. " columns fit",
+      got <= want and got >= want - 1, got .. " rows, counted " .. want)
+    H.eq("layout: the help text is on the last row that picker.sh counts, rocket after " .. before,
+      lines[height]:sub(1, side + 6), string.rep(" ", side) .. L.help:sub(1, 6))
+  end
+end
 
 H.done()

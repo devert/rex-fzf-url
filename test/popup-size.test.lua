@@ -11,8 +11,12 @@ local check = H.ok
 -- window of w cells, with an inset of k cells.
 local function app_cells(f, w, k) return math.floor(f * w - (k or 2.1)) end
 
--- The insets measured in Rex for macOS. The model must hold for each.
-local insets = { 2.03, 2.105, 2.147, 2.162 }
+-- The insets measured in Rex for macOS, for columns and for rows. The model
+-- must hold for each.
+local insets = {
+  cols = { 2.03, 2.075, 2.105, 2.115, 2.147, 2.162 },
+  rows = { 1.63, 1.65, 1.665 },
+}
 
 -- Tiled panes measured in Rex for macOS: the window size W in floating
 -- pane cells, a fraction of the window, the cells of the pane, and true for
@@ -34,6 +38,12 @@ for _, m in ipairs({
   { 68.19, 1, 66 }, { 68.84, 1, 66 }, { 27.21, 1, 25, true }, { 28.36, 1, 25, true },
   { 94.59, 1, 92 }, { 95.23, 1, 92 }, { 34.48, 1, 32, true }, { 35.09, 1, 32, true },
   { 47.62, 1, 45, true }, { 48.38, 1, 45, true },
+  -- Rex 0.1.0-preview.21, 154x38 cells in a full tiled pane.
+  { 156.84, 1, 154 }, { 156.91, 1, 154 }, { 40.24, 1, 38, true }, { 40.29, 1, 38, true },
+  -- Rex 0.1.0-preview.21 with the sidebar hidden: 38 rows, 28 rows in a
+  -- small window, and 38 rows at full screen.
+  { 38.91, 1, 38, true }, { 39.02, 1, 38, true }, { 28.815, 1, 28, true }, { 28.88, 1, 28, true },
+  { 40.28, 1, 38, true }, { 40.32, 1, 38, true },
 }) do
   local low, high = size.tiled_range(m[3], m[2], m[4] == true)
   check(string.format("tiled range for %d %s at %.2f holds %.3f", m[3], m[4] and "rows" or "columns", m[2], m[1]),
@@ -41,26 +51,60 @@ for _, m in ipairs({
 end
 
 -- Floating panes measured in Rex for macOS: W, the fraction where the pane
--- first gets n cells, and n. A fraction just below or at the edge must give
--- a range that holds W.
+-- first gets n columns, and n. A fraction just below or at the edge must
+-- give a range that holds W.
 for _, m in ipairs({
-  { 52.049, 0.21416, 9 }, { 52.049, 0.59842, 29 }, { 41.190, 0.22243, 7 }, { 41.190, 0.58660, 22 },
   { 155.649, 0.20576, 30 }, { 155.649, 0.59767, 91 }, { 127.361, 0.21282, 25 }, { 127.361, 0.60540, 75 },
 }) do
-  local low, high = size.floating_range(m[3], m[2])
-  check(string.format("floating range for %d cells at %.5f holds %.3f", m[3], m[2], m[1]),
+  local low, high = size.floating_range(m[3], m[2], false)
+  check(string.format("floating range for %d columns at %.5f holds %.3f", m[3], m[2], m[1]),
     low <= m[1] and m[1] < high, string.format("range %.3f %.3f", low, high))
-  low, high = size.floating_range(m[3] - 1, m[2] - 0.0002)
-  check(string.format("floating range for %d cells below %.5f holds %.3f", m[3] - 1, m[2], m[1]),
+  low, high = size.floating_range(m[3] - 1, m[2] - 0.0002, false)
+  check(string.format("floating range for %d columns below %.5f holds %.3f", m[3] - 1, m[2], m[1]),
     low <= m[1] and m[1] < high, string.format("range %.3f %.3f", low, high))
 end
 
+-- Floating panes measured in Rex 0.1.0-preview.21 at four window sizes:
+-- the range of W in columns and in rows that fits all the panes, and
+-- samples of the fraction of the window, and the columns and rows that the
+-- pane got. Each range must hold both ends of W.
+for _, win in ipairs({
+  { name = "154x38, sidebar shown", cols = { 156.84, 156.91 }, rows = { 40.24, 40.29 }, panes = {
+    { 0.100, 13, 2 }, { 0.198, 28, 6 }, { 0.303, 45, 10 }, { 0.408, 61, 14 }, { 0.513, 78, 19 },
+    { 0.618, 94, 23 }, { 0.723, 111, 27 }, { 0.828, 127, 31 }, { 0.933, 144, 35 }, { 1, 154, 38 },
+  } },
+  { name = "sidebar hidden", cols = { 180.025, 180.35 }, rows = { 38.91, 39.02 }, panes = {
+    { 0.10, 15, 2 }, { 0.25, 42, 8 }, { 0.40, 70, 13 }, { 0.55, 97, 19 }, { 0.70, 124, 25 },
+    { 0.85, 151, 31 }, { 1, 178, 37 },
+  } },
+  { name = "small, sidebar hidden", cols = { 116.075, 116.17 }, rows = { 28.815, 28.88 }, panes = {
+    { 0.10, 9, 1 }, { 0.25, 26, 5 }, { 0.40, 44, 9 }, { 0.55, 61, 14 }, { 0.70, 79, 18 },
+    { 0.85, 96, 22 }, { 1, 114, 27 },
+  } },
+  { name = "full screen", cols = { 180.025, 180.35 }, rows = { 40.28, 40.32 }, panes = {
+    { 0.10, 15, 2 }, { 0.25, 42, 8 }, { 0.40, 70, 14 }, { 0.55, 97, 20 }, { 0.70, 124, 26 },
+    { 0.85, 151, 32 }, { 1, 178, 38 },
+  } },
+}) do
+  for _, m in ipairs(win.panes) do
+    local low, high = size.floating_range(m[2], m[1], false)
+    check(string.format("%s: floating range for %d columns at %.3f", win.name, m[2], m[1]),
+      low <= win.cols[1] and win.cols[2] < high, string.format("range %.3f %.3f", low, high))
+    low, high = size.floating_range(m[3], m[1], true)
+    check(string.format("%s: floating range for %d rows at %.3f", win.name, m[3], m[1]),
+      low <= win.rows[1] and win.rows[2] < high, string.format("range %.3f %.3f", low, high))
+  end
+end
+
 -- A floating pane's range holds every window size that gives its cells.
-for _, w in ipairs({ 40, 50.3, 61.9, 154 }) do
-  for _, f in ipairs({ 0.1, 0.25, 0.4 }) do
-    for _, k in ipairs(insets) do
-      local low, high = size.floating_range(app_cells(f, w, k), f)
-      check(string.format("floating range at %.2f holds %.1f with inset %.3f", f, w, k), low <= w and w < high)
+for _, dir in ipairs({ "cols", "rows" }) do
+  for _, w in ipairs({ 40, 50.3, 61.9, 154 }) do
+    for _, f in ipairs({ 0.1, 0.25, 0.4 }) do
+      for _, k in ipairs(insets[dir]) do
+        local low, high = size.floating_range(app_cells(f, w, k), f, dir == "rows")
+        check(string.format("floating range at %.2f holds %.1f %s with inset %.3f", f, w, dir, k),
+          low <= w and w < high)
+      end
     end
   end
 end
@@ -70,37 +114,49 @@ check("intersect apart gives nil", size.intersect(1, 2, 3, 4) == nil)
 
 -- For every window size in the range and every inset, the pane gets at
 -- least n cells, and no more extra cells than the width of the range and
--- the spread of the insets allow. The starting size is never more than the
--- pane gets.
-for _, r in ipairs({ { 51.5, 52.5 }, { 48, 54 }, { 47.77, 52.08 }, { 150, 158 }, { 155.2, 156.1 } }) do
-  for _, n in ipairs({ 2, 7, 9, 20, 30 }) do
-    local f, start = size.fraction(n, r[1], r[2], 1)
-    local spread = size.inset_high - size.inset_low
-    local most = n + 1 + math.ceil((n + 3) * (r[2] / r[1] - 1) + spread)
-    local worst = 0
-    for i = 0, 100 do
-      local w = r[1] + (r[2] - r[1]) * i / 101
-      for _, k in ipairs(insets) do
-        local got = app_cells(f, w, k)
-        if got < n or got > most or start > got then worst = got end
+-- the spread of the insets allow. The fewest cells that it returns are
+-- never more than the pane gets.
+for _, dir in ipairs({ "cols", "rows" }) do
+  for _, r in ipairs({ { 51.5, 52.5 }, { 48, 54 }, { 47.77, 52.08 }, { 150, 158 }, { 155.2, 156.1 } }) do
+    for _, n in ipairs({ 2, 7, 9, 20, 30 }) do
+      local f, start = size.fraction(n, r[1], r[2], 1, dir == "rows")
+      local spread = size.inset[dir].high - size.inset[dir].low
+      local most = n + 1 + math.ceil((n + 3) * (r[2] / r[1] - 1) + spread)
+      local worst = 0
+      for i = 0, 100 do
+        local w = r[1] + (r[2] - r[1]) * i / 101
+        for _, k in ipairs(insets[dir]) do
+          local got = app_cells(f, w, k)
+          if got < n or got > most or start > got then worst = got end
+        end
       end
+      check(string.format("fraction for %d %s in %.2f-%.2f", n, dir, r[1], r[2]), worst == 0,
+        "bad cell count " .. worst)
     end
-    check(string.format("fraction for %d cells in %.2f-%.2f", n, r[1], r[2]), worst == 0,
-      "bad cell count " .. worst)
   end
 end
 
 -- A narrow range gives exactly n cells for each inset.
-local f = size.fraction(7, 51.9, 52.2, 1)
-local exact = true
-for _, k in ipairs(insets) do
-  if app_cells(f, 51.9, k) ~= 7 or app_cells(f, 52.19, k) ~= 7 then exact = false end
+for _, dir in ipairs({ "cols", "rows" }) do
+  local f = size.fraction(7, 51.9, 52.2, 1, dir == "rows")
+  local exact = true
+  for _, k in ipairs(insets[dir]) do
+    if app_cells(f, 51.9, k) ~= 7 or app_cells(f, 52.19, k) ~= 7 then exact = false end
+  end
+  check("narrow range is exact for " .. dir, exact)
 end
-check("narrow range is exact", exact)
+
+-- At the window measured in Rex 0.1.0-preview.21, a pane gets exactly the
+-- rows it asks for, with no extra row at the bottom.
+for _, n in ipairs({ 1, 5, 8, 12, 20, 30 }) do
+  local f = size.fraction(n, 40.24, 40.29, 1, true)
+  local got = math.floor(f * 40.26 - 1.65)
+  check(string.format("measured window gives %d rows", n), got == n, "got " .. got)
+end
 
 -- Over the limit, the pane gets the most cells that fit, and the same count
 -- for every window size in the range.
-f = size.fraction(40, 51.9, 52.2, 0.4)
+local f = size.fraction(40, 51.9, 52.2, 0.4)
 check("limit holds", f <= 0.4)
 check("limit gives one count", app_cells(f, 51.9) == app_cells(f, 52.19),
   app_cells(f, 51.9) .. " and " .. app_cells(f, 52.19))

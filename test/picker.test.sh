@@ -33,11 +33,14 @@ fake xclip 'printf "[%s]" "$*" >>"$LOG/xclip"; cat >>"$LOG/xclip"'
 fake xdg-open 'printf "%s\n" "$*" >>"$LOG/xdg-open"'
 fake browser 'printf "%s\n" "$*" >>"$LOG/browser"'
 fake sleep 'printf "%s\n" "$*" >>"$LOG/sleep"'
-# stty prints the pane size in $FAKE_STTY.
-fake stty 'printf "%s\n" "${FAKE_STTY:-}"'
-fake rex 'printf "%s\n" "$*" >>"$LOG/rex"'
+# `stty size` prints the pane size in $FAKE_STTY. Other stty calls do nothing.
+fake stty '[[ "$1" == size ]] && printf "%s\n" "${FAKE_STTY:-}"; exit 0'
+# `rex do` prints the size in $FAKE_WANT, as bin/measure.lua does.
+fake rex 'printf "%s\n" "$*" >>"$LOG/rex"; [[ "$1" == do ]] && printf "%s" "${FAKE_WANT:-}"; exit 0'
 ln -s /usr/bin/nohup "$FAKE/nohup"
-for p in sleep rex; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
+# wait-resize.sh runs `rex do` under perl.
+ln -s /usr/bin/perl "$FAKE/perl"
+for p in sleep rex stty perl; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
 
 # picker <file> [VAR=value ...]: run picker.sh on file, with a fresh log.
 # Sets $status to its exit status, and $err to the lines of its stderr that
@@ -50,7 +53,7 @@ picker() {
   shift
   LOG=$(mktemp -d "$TMP/log.XXXX")
   env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} HOME="$HOME" PATH="$FAKE:/bin" LOG="$LOG" \
-    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 FZF_URL_EXTRA_PATH= "$@" \
+    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_EXTRA_PATH= "$@" \
     /bin/bash "$DIR/bin/picker.sh" "$file" >/dev/null 2>"$TMP/stderr"
   status=$?
   err=$(grep '^fzf-url:' "$TMP/stderr")
@@ -131,16 +134,60 @@ check_eq "no PATH: open_cmd found in an install folder" "https://a.example.com" 
 check_eq "no HOME: the opener gets HOME" "$(cd ~ && pwd)" "$(log envopen | sed -n 2p)"
 check_eq "no PATH: the opener gets no . in PATH" "/usr/gnu/bin:/usr/local/bin:/bin:/usr/bin:$FAKE" "$(log envopen | sed -n 3p)"
 
-# The fzf height is the rows of the URL list plus 4, at most FZF_URL_ROWS.
+# The fzf height comes from init.lua. fzf itself limits it to the pane
+# height. Without one, or when the pane never got its size, fzf uses the
+# whole screen.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
-run "$three" FZF_URL_LIST_ROWS=3
-check_eq "height fits the URLs" "7" "$(height)"
-run "$three" FZF_URL_LIST_ROWS=5
-check_eq "height fits wrapped URLs" "9" "$(height)"
-run "$three" FZF_URL_LIST_ROWS=3 FZF_URL_ROWS=6
-check_eq "height is at most the pane rows" "6" "$(height)"
+run "$three" FZF_URL_HEIGHT=7
+check_eq "height comes from FZF_URL_HEIGHT" "7" "$(height)"
 run "$three"
-check_eq "height counts the URLs with no count given" "7" "$(height)"
+check_eq "no height: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FAKE_STTY="24 80" REX_BLOCK=block:7 FAKE_WANT="30 101"
+check_eq "no resize: no --height" "" "$(height)"
+
+# URLs that wrap get their extra rows at the columns of the pane. At 30
+# columns, a row holds 26 characters, and each next row 24. The widths come
+# widest first.
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 51 50 27 26" FAKE_STTY="20 30"
+check_eq "wrapped URLs add their extra rows" "11" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 51 50 27 26" FAKE_STTY="20 60"
+check_eq "a wider pane wraps fewer rows" "7" "$(height)"
+# The count stops at the first URL that does not wrap, so it does not read
+# the widths after it.
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 27 26 x" FAKE_STTY="20 30"
+check_eq "the count stops at the first URL that does not wrap" "8" "$(height)"
+# The count also stops when the height fills the pane.
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 200 200 200" FAKE_STTY="10 40"
+check_eq "the count stops when the height fills the pane" "10" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50" FAKE_STTY="20 5"
+check_eq "a pane narrower than the layout keeps 3 text columns" "54" "$(height)"
+# A "w" marks a URL with a wide character, which can lose one column on
+# each row. At 40 columns, a 70-column URL then takes 2 extra rows, not 1.
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 70" FAKE_STTY="20 40"
+check_eq "a URL without wide characters" "6" "$(height)"
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 70w" FAKE_STTY="20 40"
+check_eq "a URL with a wide character loses a column on each row" "7" "$(height)"
+run "$three" FZF_URL_HEIGHT=5 FZF_URL_WRAP="4 2 36w" FAKE_STTY="20 40"
+check_eq "a URL with a wide character that fits takes one row" "5" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 3w" FAKE_STTY="20 5"
+check_eq "a narrow pane keeps one column for each next row" "7" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50w" FAKE_STTY="20 5"
+check_eq "a narrow pane with a wide character loses a column on its first row" "55" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50x" FAKE_STTY="20 30"
+check_eq "a bad wrap mark: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="x 2 50" FAKE_STTY="20 30"
+check_eq "a bad layout value: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 x" FAKE_STTY="20 30"
+check_eq "a bad wrap width: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2" FAKE_STTY="20 30"
+check_eq "no wrap widths: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=x
+check_eq "a bad height: no --height" "" "$(height)"
+
+# The help text comes from init.lua.
+header() { log fzf.args | grep -A1 -x -- --header | tail -1; }
+run "$three" FZF_URL_HEADER='Enter: Open'
+check_eq "header comes from FZF_URL_HEADER" "Enter: Open" "$(header)"
 
 run "$two" FZF_URL_FZF_OPTIONS='--exact --reverse'
 check_eq "fzf_options are split into words" $'--exact\n--reverse' "$(log fzf.args | tail -2)"
@@ -162,20 +209,18 @@ check_eq "no opener fails" "1" "$status"
 check_eq "no opener message" 'fzf-url: no opener found (open/xdg-open/$BROWSER)' "$err"
 mv "$TMP/open" "$TMP/xdg-open" "$FAKE/"
 
-# With no starting size, wait while the pane is still 80x24, for at most
-# 25 tries.
-run "$two" FZF_URL_ROWS= FAKE_STTY="24 80"
-check_eq "no starting size: waits for the resize" "25" "$(log sleep | wc -l | tr -d ' ')"
-run "$two" FZF_URL_ROWS= FAKE_STTY="30 100"
-check_eq "no starting size: no wait after the resize" "" "$(log sleep)"
-
-# With a measure spec, start bin/measure.lua in the background.
+# The picker waits for the resize with bin/wait-resize.sh (see
+# wait-resize.test.sh). It passes the cache and the measure spec on.
 run "$two" REX_BLOCK=block:7 FZF_URL_CACHE=/tmp/cache FZF_URL_MEASURE="window:1 k 0.5 0.4"
-for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q '^do ' "$LOG/rex" 2>/dev/null && break; /bin/sleep 0.1; done
-check_eq "starts measure.lua" \
+check_eq "measure.lua gets the cache and the spec" \
   "do $DIR/bin/measure.lua block=block:7 cache=/tmp/cache spec=window:1 k 0.5 0.4" "$(grep '^do ' "$LOG/rex")"
-run "$two"
-check_eq "no measure spec, no measure.lua" "" "$(grep '^do ' "$LOG/rex")"
+run "$two" REX_BLOCK=block:7
+check_eq "no measure spec, measure.lua gets only the block" \
+  "do $DIR/bin/measure.lua block=block:7" "$(grep '^do ' "$LOG/rex")"
+
+# The help text has a default, for an init.lua that does not set it yet.
+run "$three"
+check_eq "header has a default" "Enter: Open URL / CTRL-Y: Copy to clipboard" "$(header)"
 
 run "$two" PATH="$NOFZF:/bin"
 check_eq "no fzf fails" "1" "$status"
@@ -239,5 +284,14 @@ check_eq "fzf_path name not in PATH message" "fzf-url: fzf_path not found in PAT
 picker "$TMP/none"
 check_eq "a missing URL file fails" "1" "$status"
 check_eq "a missing URL file message" "fzf-url: no URL list file" "$err"
+
+# A failure before fzf starts waits for the pane size first, so that the
+# message is not broken by the resize. It does not wait again on exit.
+run "$two" PATH="$NOFZF:/bin" REX_BLOCK=block:7
+check_eq "an early failure waits for the pane size, then focuses" \
+  "do $DIR/bin/measure.lua block=block:7
+focus block:9" "$(log rex)"
+run "$two" FAKE_FZF_EXIT=2 REX_BLOCK=block:7
+check_eq "a late failure does not wait for the size again" "1" "$(grep -c '^do ' "$LOG/rex")"
 
 finish

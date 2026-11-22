@@ -91,7 +91,12 @@ run_test() {
         # first line of the fzf call in picker.sh. That line is not counted.
         # kcov prints the trace lines that it can't read to stderr, so drop
         # them. The test results go to stdout.
-        kcov --include-path="$PWD/bin" --exclude-line='selection=$(printf' kcov "$1" 2>/dev/null
+        # Each test file tests one source file, so measure only that file.
+        # Other scripts that the source file runs or sources have test files
+        # of their own.
+        local name=${1##*/}
+        kcov --include-pattern="$PWD/bin/${name%.test.sh}." \
+          --exclude-line='selection=$(printf' kcov "$1" 2>/dev/null
       else
         /bin/bash "$1"
       fi ;;

@@ -20,7 +20,7 @@ You can also open the list from the Rex command palette. Search for "Find URLs i
 
 The plugin has only been tested on macOS at this time.
 
-- [Rex](https://www.superlogical.com/rex)
+- [Rex](https://www.superlogical.com/rex) 0.1.0-preview.21 or later. Earlier versions put more space below a floating pane, so the last URL in the picker can be out of view.
 - [fzf](https://github.com/junegunn/fzf)
 - [perl](https://www.perl.org) and [bash](https://www.gnu.org/software/bash/) (macOS includes both)
 
