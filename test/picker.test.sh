@@ -26,6 +26,8 @@ fake() {
 fake fzf 'printf "%s\n" "$@" >"$LOG/fzf.args"; cat >"$LOG/fzf.in"; printf "%b" "${FAKE_FZF_OUTPUT:-}"; exit "${FAKE_FZF_EXIT:-0}"'
 fake open 'printf "%s\n" "$*" >>"$LOG/open"'
 fake myopen 'printf "%s\n" "$*" >>"$LOG/myopen"'
+# envopen logs the URL, HOME, and PATH that it gets.
+fake envopen 'printf "%s\n" "$*" "$HOME" "$PATH" >>"$LOG/envopen"'
 fake pbcopy 'printf "[%s]" "$*" >>"$LOG/pbcopy"; cat >>"$LOG/pbcopy"'
 fake xclip 'printf "[%s]" "$*" >>"$LOG/xclip"; cat >>"$LOG/xclip"'
 fake xdg-open 'printf "%s\n" "$*" >>"$LOG/xdg-open"'
@@ -48,7 +50,7 @@ picker() {
   shift
   LOG=$(mktemp -d "$TMP/log.XXXX")
   env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} HOME="$HOME" PATH="$FAKE:/bin" LOG="$LOG" \
-    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 "$@" \
+    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 FZF_URL_EXTRA_PATH= "$@" \
     /bin/bash "$DIR/bin/picker.sh" "$file" >/dev/null 2>"$TMP/stderr"
   status=$?
   err=$(grep '^fzf-url:' "$TMP/stderr")
@@ -108,8 +110,26 @@ run "$two" FAKE_FZF_EXIT=130
 check_eq "escape exits 0" "0" "$status"
 check_eq "escape opens nothing" "" "$(log open)"
 
-run "$two" FAKE_FZF_OUTPUT='\n'
+run "$two" FAKE_FZF_OUTPUT='\n' FAKE_FZF_EXIT=1
+check_eq "enter with no match exits 0" "0" "$status"
 check_eq "enter with no match opens nothing" "" "$(log open)"
+
+run "$two" FAKE_FZF_EXIT=2
+check_eq "fzf error fails" "1" "$status"
+check_eq "fzf error message" "fzf-url: fzf failed with exit status 2" "$err"
+
+# Without HOME, the picker gets HOME from the user database and exports it.
+# No PATH: bash sets a default PATH that ends in `.`. The picker drops the
+# `.` and exports the rest, so nohup finds the opener.
+LOG=$(mktemp -d "$TMP/log.XXXX")
+printf '%s\n' "$two" >"$TMP/urls"
+env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} LOG="$LOG" FZF_URL_EXTRA_PATH="$FAKE" \
+  FZF_URL_OPEN_CMD=envopen FAKE_FZF_OUTPUT='\nhttps://a.example.com\n' \
+  /bin/bash "$DIR/bin/picker.sh" "$TMP/urls" >/dev/null 2>"$TMP/stderr"
+check_eq "no HOME or PATH exits 0" "0" "$?"
+check_eq "no PATH: open_cmd found in an install folder" "https://a.example.com" "$(log envopen | sed -n 1p)"
+check_eq "no HOME: the opener gets HOME" "$(cd ~ && pwd)" "$(log envopen | sed -n 2p)"
+check_eq "no PATH: the opener gets no . in PATH" "/usr/gnu/bin:/usr/local/bin:/bin:/usr/bin:$FAKE" "$(log envopen | sed -n 3p)"
 
 # The fzf height is the rows of the URL list plus 4, at most FZF_URL_ROWS.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
@@ -159,7 +179,62 @@ check_eq "no measure spec, no measure.lua" "" "$(grep '^do ' "$LOG/rex")"
 
 run "$two" PATH="$NOFZF:/bin"
 check_eq "no fzf fails" "1" "$status"
-check_eq "no fzf message" "fzf-url: fzf not found in PATH" "$err"
+check_eq "no fzf message" "fzf-url: fzf not found. Set fzf_path in setup() to the full path of fzf." "$err"
+check_eq "no fzf removes the URL file" "no" "$([[ -e "$url_file" ]] && echo yes || echo no)"
+
+# An empty FZF_URL_EXTRA_PATH or PATH must not add the current folder to PATH.
+mkdir -p "$TMP/cwd"
+cp "$FAKE/fzf" "$TMP/cwd/fzf"
+cd "$TMP/cwd" || exit 1
+run "$two" PATH="$NOFZF:/bin"
+check_eq "empty extra path does not search the current folder" "1" "$status"
+run "$two" PATH= FZF_URL_EXTRA_PATH="$NOFZF:/bin"
+check_eq "empty PATH does not search the current folder" "1" "$status"
+run "$two" PATH=".:$NOFZF:/bin"
+check_eq "a . in PATH does not search the current folder" "1" "$status"
+mkdir -p "$TMP/cwd/sub"
+cp "$FAKE/fzf" "$TMP/cwd/sub/fzf"
+run "$two" PATH="sub:$NOFZF:/bin"
+check_eq "a relative part in PATH is not searched" "1" "$status"
+cd "$DIR" || exit 1
+
+# Without fzf in PATH, find it in the usual install folders, after PATH.
+run "$two" PATH="$NOFZF:/bin" FZF_URL_EXTRA_PATH="$TMP/missing:$FAKE"
+check_eq "fzf in an install folder is used" "0" "$status"
+check_eq "fzf in an install folder gets the URLs" "$two" "$(log fzf.in)"
+
+# fzf_path replaces fzf in PATH. A leading ~ is the home folder.
+mkdir -p "$TMP/home/apps"
+cp "$FAKE/fzf" "$TMP/home/apps/myfzf"
+run "$two" PATH="$NOFZF:/bin" FZF_URL_FZF_PATH="$TMP/home/apps/myfzf"
+check_eq "fzf_path is used" "$two" "$(log fzf.in)"
+run "$two" PATH="$NOFZF:/bin" HOME="$TMP/home" FZF_URL_FZF_PATH="~/apps/myfzf"
+check_eq "fzf_path expands ~" "$two" "$(log fzf.in)"
+run "$two" FZF_URL_FZF_PATH="$TMP/home/apps"
+check_eq "fzf_path that is a folder fails" "1" "$status"
+check_eq "fzf_path that is a folder message" \
+  "fzf-url: fzf_path is not an executable file: $TMP/home/apps" "$err"
+run "$two" FZF_URL_FZF_PATH="apps/myfzf"
+check_eq "relative fzf_path fails" "1" "$status"
+check_eq "relative fzf_path message" "fzf-url: fzf_path must start with / or ~/: apps/myfzf" "$err"
+run "$two" FZF_URL_FZF_PATH="$TMP/nothing"
+check_eq "fzf_path that is missing fails" "1" "$status"
+check_eq "fzf_path that is missing does not run fzf" "" "$(log fzf.in)"
+check_eq "fzf_path that is missing removes the URL file" "no" "$([[ -e "$url_file" ]] && echo yes || echo no)"
+
+# Only `~` and `~/` are the home folder. `~name` is left as it is.
+mkdir -p "$TMP/home/foo"
+cp "$FAKE/fzf" "$TMP/home/foo/fzf"
+run "$two" PATH="$NOFZF:/bin" HOME="$TMP/home/" FZF_URL_FZF_PATH="~foo/fzf"
+check_eq "fzf_path with ~name is not expanded" "1" "$status"
+check_eq "fzf_path with ~name message" "fzf-url: fzf_path must start with / or ~/: ~foo/fzf" "$err"
+
+# A name without a slash is found in PATH.
+run "$two" PATH="$NOFZF:/bin" FZF_URL_EXTRA_PATH="$TMP/home/apps" FZF_URL_FZF_PATH="myfzf"
+check_eq "fzf_path name in PATH is used" "$two" "$(log fzf.in)"
+run "$two" PATH="$NOFZF:/bin" FZF_URL_FZF_PATH="nofzf"
+check_eq "fzf_path name not in PATH fails" "1" "$status"
+check_eq "fzf_path name not in PATH message" "fzf-url: fzf_path not found in PATH: nofzf" "$err"
 
 picker "$TMP/none"
 check_eq "a missing URL file fails" "1" "$status"

@@ -439,7 +439,7 @@ H.ok("message popup is in the window and has focus",
   log.layers[1].window_id == "window:1" and log.layers[1].focus == true)
 
 -- URLs: the picker gets them newest first, and the options.
-def, log = action({ open_cmd = "firefox", copy_cmd = "xclip", fzf_options = "--exact" },
+def, log = action({ open_cmd = "firefox", copy_cmd = "xclip", fzf_path = "/opt/fzf", fzf_options = "--exact" },
   { exec = { ok = true, stdout = "https://a.example.com\nhttps://b.example.com\nhttps://c.example.com\n" } })
 def.run({ block_id = "block:1" }, {})
 local cmd = command(log)
@@ -452,6 +452,7 @@ H.eq("picker gets URLs newest first", listed, "https://c.example.com\nhttps://b.
 H.ok("picker runs picker.sh", cmd[1] == "env" and cmd[#cmd - 1]:match("/bin/picker%.sh$") and cmd[#cmd - 2] == "bash")
 H.eq("picker gets open_cmd", env(cmd, "FZF_URL_OPEN_CMD"), "firefox")
 H.eq("picker gets copy_cmd", env(cmd, "FZF_URL_COPY_CMD"), "xclip")
+H.eq("picker gets fzf_path", env(cmd, "FZF_URL_FZF_PATH"), "/opt/fzf")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
 H.eq("picker gets the list rows", env(cmd, "FZF_URL_LIST_ROWS"), "3")
@@ -463,6 +464,13 @@ def, log = action({}, { exec = { ok = true, stdout = "https://a.example.com\n" }
 def.run({ block_id = "block:1" }, {})
 H.eq("unset options pass empty values", env(command(log), "FZF_URL_OPEN_CMD"), "")
 os.remove(command(log)[#command(log)])
+
+-- Options that are not strings fail in setup, not on every run.
+H.raises("open_cmd that is not a string", "fzf-url: open_cmd must be a string", action, { open_cmd = {} })
+H.raises("copy_cmd that is not a string", "fzf-url: copy_cmd must be a string", action, { copy_cmd = 1 })
+H.raises("fzf_path that is not a string", "fzf-url: fzf_path must be a string", action, { fzf_path = true })
+H.raises("fzf_options that is not a string", "fzf-url: fzf_options must be a string", action,
+  { fzf_options = { "--exact" } })
 
 -- The URL file is removed when the popup fails to open.
 def, log = action({}, { exec = { ok = true, stdout = "https://a.example.com\n" }, layer_err = "no window" })
