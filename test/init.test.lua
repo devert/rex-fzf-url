@@ -254,6 +254,17 @@ w = run_locate("block:1", one, { ["block:1"] = { 150, 40, other = true } })
 range_is("another client: the owner's columns", w.cols, 151.5, 153.5)
 range_is("another client: the owner's rows", w.rows, 40.1, 43.5)
 
+-- An owner that wants no size: take the block's own size, not the size
+-- that another client wants.
+w = with_rex({
+  session = { view = function() return { windows = one } end },
+  block = { call = function()
+    return { owner = 2, columns = 150, rows = 40, desired = { { client_id = 1, columns = 99, rows = 99 } } }
+  end },
+}, function(m) return m._locate("block:1") end)
+range_is("owner with no size: the block's columns", w.cols, 151.5, 153.5)
+range_is("owner with no size: the block's rows", w.rows, 40.1, 43.5)
+
 w = run_locate("block:9", one, { ["block:1"] = { 150, 40 } })
 H.eq("unknown block: no window", w.window_id, nil)
 range_is("unknown block: default columns", w.cols, 160, 161)
@@ -363,14 +374,25 @@ H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http:/
 
 -- When max_width makes the pane narrower than the longest URL, the picker
 -- gets a row for each wrapped part, counted at the fewest columns that the
--- pane can get.
+-- pane can get. fzf gets the height with each URL on one row, and the
+-- widths of the URLs that wrap at those columns.
 local narrow = { cols = { 79.5, 80.5 }, rows = { 39.5, 40.5 } }
-local nb, nheight = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
-local nrows = nheight - 4
+local nb, nheight, nwrap = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
 local least_cols = select(2, real_size.fraction(#pr + 6, 79.5, 80.5, 0.8))
-H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, least_cols))
+local nrows = P._list_rows({ pr, "http://localhost:5173/" }, least_cols)
 H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
 same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 6, nrows + 4))
+H.eq("narrow picker: fzf height has one row for each URL", nheight, 6)
+H.eq("narrow picker: the wrapped URL goes to fzf", table.concat(nwrap, " "), tostring(#pr))
+H.eq("no wrap: no wrap widths", #select(3, P._picker_bounds(where, { "https://a.example.com" })), 0)
+
+-- Wide characters take two columns.
+H.eq("width: ASCII", P._width_of("abc"), 3)
+H.eq("width: é takes one column", P._width_of("\195\169"), 1)
+H.eq("width: a CJK character takes two columns", P._width_of("https://\228\190\139.jp"), 13)
+H.eq("width: a full-width letter takes two columns", P._width_of("\239\188\161"), 2)
+H.eq("width: an emoji takes two columns", P._width_of("\240\159\152\128"), 2)
+H.eq("width: a stray continuation byte takes no column", P._width_of("\128a"), 1)
 
 ------------------------------------------------------------------------
 -- The fzf_url action
@@ -467,11 +489,22 @@ H.eq("picker gets fzf_path", env(cmd, "FZF_URL_FZF_PATH"), "/opt/fzf")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
 H.eq("picker gets the fzf height", env(cmd, "FZF_URL_HEIGHT"), "7")
+H.eq("picker gets no wrap widths for short URLs", env(cmd, "FZF_URL_WRAP"), "")
 H.eq("picker gets the help text", env(cmd, "FZF_URL_HEADER"), "Enter: Open URL / CTRL-Y: Copy to clipboard")
 H.eq("picker popup has no starting size", log.layers[1].layout.options.size, nil)
 H.eq("picker gets no starting rows", env(cmd, "FZF_URL_ROWS"), nil)
 H.ok("picker gets the measure spec", (env(cmd, "FZF_URL_MEASURE") or ""):match("^window:1 %x+ [%d.]+ [%d.]+$"),
   env(cmd, "FZF_URL_MEASURE"))
+
+-- A URL wider than the largest popup can wrap, so the picker gets its width
+-- after the layout values.
+local wide_url = "https://example.com/" .. string.rep("w", 180)
+def, log = action({}, { exec = { ok = true, stdout = wide_url .. "\n" } })
+def.run({ block_id = "block:1" }, {})
+cmd = command(log)
+os.remove(cmd[#cmd])
+H.eq("picker gets the width of a URL that can wrap", env(cmd, "FZF_URL_WRAP"), "4 2 200")
+H.eq("picker gets the height with the URL on one row", env(cmd, "FZF_URL_HEIGHT"), "5")
 
 def, log = action({}, { exec = { ok = true, stdout = "https://a.example.com\n" } })
 def.run({ block_id = "block:1" }, {})
@@ -512,7 +545,7 @@ local function chars(s) return select(2, s:gsub("[^\128-\191]", "")) end
 
 -- Run picker.sh on urls in a tmux pane of cols x rows. Return the lines of
 -- the screen, without blank space at the end of each line.
-local function screen(urls, cols, rows, height)
+local function screen(urls, cols, rows, height, wrap)
   local file = os.tmpname()
   local f = assert(io.open(file, "w"))
   f:write(table.concat(urls, "\n"), "\n")
@@ -527,7 +560,7 @@ local function screen(urls, cols, rows, height)
   -- that runs the tests.
   sh(tmux .. "new-session -d -x " .. cols .. " -y " .. rows .. " " .. q(table.concat({
     "env", "FZF_URL_HEADER=" .. q(P._layout.help), "FZF_URL_HEIGHT=" .. height,
-    "FZF_DEFAULT_OPTS=", "FZF_DEFAULT_OPTS_FILE=", "REX_BLOCK=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
+    "FZF_URL_WRAP=" .. q(wrap or ""), "FZF_DEFAULT_OPTS=", "FZF_DEFAULT_OPTS_FILE=", "REX_BLOCK=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
   }, " ")))
   local text = ""
   for _ = 1, 50 do
@@ -596,6 +629,17 @@ else
     lines = screen({ url }, cols, height, height)
     H.eq("layout: a " .. n .. "-character URL at " .. cols .. " columns takes " .. want .. " rows",
       url_rows(lines), want)
+
+    -- picker.sh counts the same rows from FZF_URL_WRAP at the pane width.
+    -- The pane is taller than that, so a count that is too high shows as
+    -- blank rows above the URL, and one that is too low cuts off the help.
+    lines = screen({ url }, cols, height + 3, 1 + L.extra_rows,
+      table.concat({ L.url_cols, L.wrap_cols, n }, " "))
+    H.eq("layout: picker.sh counts the rows of a " .. n .. "-character URL", url_rows(lines), want)
+    H.eq("layout: the " .. n .. "-character URL starts on the first row", lines[1]:find("https", 1, true) ~= nil, true)
+    -- At 40 columns, fzf cuts off the end of the help text.
+    H.eq("layout: the help text is on the last row that picker.sh counts",
+      lines[height]:sub(1, side + 6), string.rep(" ", side) .. L.help:sub(1, 6))
   end
 end
 

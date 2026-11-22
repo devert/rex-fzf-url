@@ -13,7 +13,9 @@
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
 #   FZF_URL_HEADER       the help text below the prompt (default: the text
 #                        in the layout table of init.lua)
-#   FZF_URL_HEIGHT       the rows that fzf needs, with wrapped URLs
+#   FZF_URL_HEIGHT       the rows that fzf needs, with each URL on one row
+#   FZF_URL_WRAP         "URL_COLS WRAP_COLS WIDTH...": the layout values and
+#                        the widths of the URLs that can wrap
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
 set -u
@@ -93,11 +95,11 @@ fi
 [[ -z "$urls" ]] && exit 0
 
 # Draw fzf from the top of the pane, as tall as its content. init.lua works
-# out that height in FZF_URL_HEIGHT, from the layout that the fzf options
-# below set. There is no bottom padding row, as Rex pads the bottom of a
-# floating pane. The pane can be one or two rows taller than that, and the
-# extra rows are then at the bottom. Two extra rows can happen in the first
-# popup in a window, before bin/measure.lua saves the size of the window.
+# out that height from the layout that the fzf options below set. There is
+# no bottom padding row, as Rex pads the bottom of a floating pane. The pane
+# can be one or two rows taller than that, and the extra rows are then at
+# the bottom. Two extra rows can happen in the first popup in a window,
+# before bin/measure.lua saves the size of the window.
 # Wait for the app to resize the pane, as fzf draws in place with --height,
 # so lines that it draws before the resize stay on the screen. This also
 # saves the size of the pane (see bin/wait-resize.sh).
@@ -107,15 +109,46 @@ fi
 # Then, and without a height, leave out --height. fzf then uses the whole
 # screen and draws it again after a resize, with no stale lines.
 . "${0%/*}/wait-resize.sh"
+
+# fzf_height: print the rows that fzf needs in this pane. That is
+# FZF_URL_HEIGHT, plus the extra rows of each URL in FZF_URL_WRAP that wraps
+# at the columns of the pane. This is the count of list_rows in init.lua.
+# Change them together. Return 1 when the height is not known.
+fzf_height() {
+    local height=${FZF_URL_HEIGHT:-} size url_cols wrap_cols text w
+    [[ "$height" =~ ^[0-9]+$ ]] || return 1
+    set -f
+    # shellcheck disable=SC2086
+    set -- ${FZF_URL_WRAP:-}
+    set +f
+    if [[ $# -gt 0 ]]; then
+        size=$(stty size 2>/dev/null)
+        [[ "$size" =~ ^[0-9]+\ [0-9]+$ && $# -ge 3 ]] || return 1
+        for w in "$@"; do [[ "$w" =~ ^[0-9]+$ ]] || return 1; done
+        url_cols=$1 wrap_cols=$2
+        shift 2
+        text=$((${size#* } - url_cols))
+        [[ "$text" -gt "$wrap_cols" ]] || text=$((wrap_cols + 1))
+        # A URL of w columns takes ceil((w - text) / (text - wrap_cols))
+        # extra rows.
+        for w in "$@"; do
+            if [[ "$w" -gt "$text" ]]; then
+                height=$((height + (w - text + text - wrap_cols - 1) / (text - wrap_cols)))
+            fi
+        done
+    fi
+    echo "$height"
+}
+
 height_args=()
-if wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}" && [[ -n "${FZF_URL_HEIGHT:-}" ]]; then
-    height_args=(--height "$FZF_URL_HEIGHT")
+if wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}" && height=$(fzf_height); then
+    height_args=(--height "$height")
 fi
 
 # --no-border, --no-margin, and --no-padding stop FZF_DEFAULT_OPTS from adding
 # rows that the popup size does not count. Those rows hide part of the URL list.
 # --multi lets Tab select more than one URL. --wrap wraps a long URL onto more
-# rows instead of cutting it off. FZF_URL_HEIGHT counts those extra rows.
+# rows instead of cutting it off. fzf_height counts those extra rows.
 # The padding, the header, and its border set the layout that init.lua sizes
 # the pane for. Change them together with the layout table in init.lua.
 # Rest of fzf options ported from junegunn/tmux-fzf-url's fzf-url.rb.

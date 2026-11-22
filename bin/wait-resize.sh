@@ -10,27 +10,42 @@
 wait_resize_dir=${BASH_SOURCE[0]%/*}
 
 # wait_resize [CACHE SPEC]: wait until the terminal has the size that the
-# app asks for. bin/measure.lua waits up to half a second for that size and
-# prints it. Rex sets REX_BLOCK in its panes. Then wait up to half a second
-# for the terminal to get that size. With CACHE and SPEC, measure.lua also
-# saves the size, so that later popups in this window fit their content more
-# closely. If measure.lua prints no size, wait for any size other than
-# 80x24.
+# app asks for. bin/measure.lua waits for that size and prints it. Rex sets
+# REX_BLOCK in its panes. `rex do` can hang when the app is busy, so stop it
+# after wait_resize_limit seconds. Then check the terminal size
+# wait_resize_tries more times, 20 ms apart, until it has that size. The
+# whole wait can take longer than these numbers say, because each check also
+# starts stty and sleep.
+# With CACHE and SPEC, measure.lua also saves the size, so that later popups
+# in this window fit their content more closely. If measure.lua prints no
+# size, wait for any size other than 80x24.
 # The terminal can settle on a size other than the one that measure.lua
 # printed, for example when the window changes size during the wait. So a
 # size other than 80x24 that stays the same for wait_resize_stable checks
-# also ends the wait.
+# also ends the wait. That is about 0.2 seconds, which is longer than the
+# steps of a resize usually take.
 # Return 0 when the terminal has its new size, and 1 when the wait timed out.
-wait_resize_stable=5
+wait_resize_limit=1
+wait_resize_tries=25
+wait_resize_stable=10
 wait_resize() {
-    local want= size last= same=0 tries=25 args
+    local want= size last= same=0 tries=$wait_resize_tries args
     if [[ -n "${REX_BLOCK:-}" ]]; then
         args=("block=$REX_BLOCK")
         [[ -n "${1:-}" && -n "${2:-}" ]] && args+=("cache=$1" "spec=$2")
-        want=$("${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "$wait_resize_dir/measure.lua" "${args[@]}" 2>/dev/null)
+        # perl's alarm stops `rex do` after the limit, as macOS has no
+        # timeout command. macOS has perl, but without it, run `rex do`
+        # with no limit.
+        # Keep each command on one line: bash 3.2 gives a command that
+        # spans lines the number of its last line, which test coverage
+        # then can't count.
+        local cmd=("${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "$wait_resize_dir/measure.lua" "${args[@]}")
+        command -v perl >/dev/null 2>&1 &&
+            cmd=(perl -e 'alarm shift; exec @ARGV or exit 127' "$wait_resize_limit" "${cmd[@]}")
+        want=$("${cmd[@]}" 2>/dev/null)
         [[ "$want" =~ ^[0-9]+\ [0-9]+$ ]] || want=
     fi
-    while [[ "$tries" -gt 0 ]]; do
+    while :; do
         size=$(stty size 2>/dev/null)
         if [[ -n "$want" ]]; then
             [[ "$size" == "$want" ]] && return 0
@@ -44,8 +59,9 @@ wait_resize() {
         else
             [[ "$size" != "24 80" ]] && return 0
         fi
+        # Check once more after the last sleep, so that it is not wasted.
+        [[ "$tries" -le 0 ]] && return 1
         sleep 0.02
         tries=$((tries - 1))
     done
-    return 1
 }

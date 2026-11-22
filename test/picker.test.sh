@@ -37,6 +37,8 @@ fake sleep 'printf "%s\n" "$*" >>"$LOG/sleep"'
 fake stty 'printf "%s\n" "${FAKE_STTY:-}"'
 fake rex 'printf "%s\n" "$*" >>"$LOG/rex"'
 ln -s /usr/bin/nohup "$FAKE/nohup"
+# wait-resize.sh runs `rex do` under perl.
+ln -s /usr/bin/perl "$FAKE/perl"
 for p in sleep rex; do ln -s "$FAKE/$p" "$NOFZF/$p"; done
 
 # picker <file> [VAR=value ...]: run picker.sh on file, with a fresh log.
@@ -141,6 +143,21 @@ run "$three"
 check_eq "no height: no --height" "" "$(height)"
 run "$three" FZF_URL_HEIGHT=7 FAKE_STTY="24 80"
 check_eq "no resize: no --height" "" "$(height)"
+
+# URLs that can wrap get their extra rows at the columns of the pane. At 30
+# columns, a row holds 26 characters, and each next row 24.
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 26 27 50 51" FAKE_STTY="20 30"
+check_eq "wrapped URLs add their extra rows" "11" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 26 27 50 51" FAKE_STTY="20 60"
+check_eq "a wider pane wraps fewer rows" "7" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 50" FAKE_STTY="20 5"
+check_eq "a pane narrower than the layout keeps 3 text columns" "54" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2 x" FAKE_STTY="20 30"
+check_eq "a bad wrap width: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=7 FZF_URL_WRAP="4 2" FAKE_STTY="20 30"
+check_eq "no wrap widths: no --height" "" "$(height)"
+run "$three" FZF_URL_HEIGHT=x
+check_eq "a bad height: no --height" "" "$(height)"
 
 # The help text comes from init.lua.
 header() { log fzf.args | grep -A1 -x -- --header | tail -1; }

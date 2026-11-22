@@ -136,16 +136,15 @@ end
 
 -- Return the size of a terminal block: the size that its owner wants for
 -- it, as the block's own size can differ when another client controls it.
--- Other clients can want other sizes. With no owner, take the first size.
+-- Other clients can want other sizes, so when the owner wants no size, take
+-- the block's own size. With no owner, take the first size.
 local function block_size(block_id)
   local s = rex.block.call(terminal, "size", { block_id = block_id })
   if s == nil then return nil end
-  local first
   for _, d in ipairs(s.desired or {}) do
-    if d.client_id == s.owner then return d end
-    first = first or d
+    if s.owner == nil or d.client_id == s.owner then return d end
   end
-  return first or s
+  return s
 end
 
 -- Return what the popups need to know about block_id: the window that holds
@@ -223,11 +222,33 @@ local function open_popup(where, bounds, command)
   }
 end
 
--- Return the width of s in columns: the number of UTF-8 characters, not
--- bytes. Each character takes one column. Wide characters, such as CJK,
--- take two, but URLs seldom have them.
+-- The code points of wide characters, which take two columns: the common
+-- ranges of East Asian wide and full-width characters, and emoji.
+local wide = {
+  { 0x1100, 0x115F }, { 0x2E80, 0x303E }, { 0x3041, 0x33FF }, { 0x3400, 0x4DBF },
+  { 0x4E00, 0x9FFF }, { 0xA000, 0xA4CF }, { 0xAC00, 0xD7A3 }, { 0xF900, 0xFAFF },
+  { 0xFE30, 0xFE4F }, { 0xFF00, 0xFF60 }, { 0xFFE0, 0xFFE6 }, { 0x1F300, 0x1F64F },
+  { 0x1F900, 0x1F9FF }, { 0x20000, 0x3FFFD },
+}
+
+-- Return the width of s in columns. A UTF-8 character takes one column, or
+-- two when it is wide. Bytes that start no character take no column.
 local function width_of(s)
-  return #(s:gsub("[\128-\191]", ""))
+  local width = 0
+  for ch in s:gmatch("[%z\1-\127\192-\255][\128-\191]*") do
+    local first = ch:byte(1)
+    local cols = 1
+    if first >= 0xE0 then
+      -- Characters below U+0800 have 1 or 2 bytes, and none of them is wide.
+      local cp = first >= 0xF0 and first - 0xF0 or first - 0xE0
+      for i = 2, #ch do cp = cp * 64 + ch:byte(i) - 0x80 end
+      for _, r in ipairs(wide) do
+        if cp >= r[1] and cp <= r[2] then cols = 2 break end
+      end
+    end
+    width = width + cols
+  end
+  return width
 end
 
 -- Return centered bounds for a popup whose terminal is cols x rows cells,
@@ -242,12 +263,19 @@ local function popup_bounds(where, cols, rows)
   return { (1 - w) / 2, (1 - h) / 2, w, h }
 end
 
+-- Return the columns for URL text on the first row of a URL in a pane that
+-- is cols columns wide.
+local function text_cols(cols)
+  return math.max(cols - layout.url_cols, layout.wrap_cols + 1)
+end
+
 -- Return the rows that fzf needs for the URLs in a pane that is cols
 -- columns wide. A URL that is wider than the list wraps: fzf puts the text
 -- width of the list on the first row, and fewer characters on each next
--- row, which starts with a wrap mark.
+-- row, which starts with a wrap mark. bin/picker.sh does the same count for
+-- the URLs in FZF_URL_WRAP. Change them together.
 local function list_rows(urls, cols)
-  local text = math.max(cols - layout.url_cols, layout.wrap_cols + 1)
+  local text = text_cols(cols)
   local rows = 0
   for _, url in ipairs(urls) do
     local n = width_of(url)
@@ -265,18 +293,26 @@ end
 -- the rows of the URL list plus layout.extra_rows. Rex pads the bottom of a
 -- floating pane, so the picker needs no padding row. When max_width makes
 -- the pane narrower than a URL, the URL wraps, so count the rows at the
--- fewest columns that the pane can get. Also return the height for fzf.
+-- fewest columns that the pane can get.
+-- Also return what fzf needs: its height with each URL on one row, and the
+-- widths of the URLs that can wrap. The pane can get more columns than the
+-- fewest, where those URLs wrap onto fewer rows. So bin/picker.sh adds their
+-- extra rows when it knows the columns of the pane.
 local function picker_bounds(where, urls)
   local width = width_of(layout.help)
   for _, url in ipairs(urls) do
     width = math.max(width, width_of(url))
   end
-  local height
+  local wrap = {}
   local bounds = popup_bounds(where, width + 2 * layout.side_cols, function(cols)
-    height = list_rows(urls, cols) + layout.extra_rows
-    return height
+    local text = text_cols(cols)
+    for _, url in ipairs(urls) do
+      local n = width_of(url)
+      if n > text then wrap[#wrap + 1] = n end
+    end
+    return list_rows(urls, cols) + layout.extra_rows
   end)
-  return bounds, height
+  return bounds, #urls + layout.extra_rows, wrap
 end
 
 -- Show a one-line message in a small floating pane sized to the message.
@@ -363,7 +399,14 @@ function M.setup(opts)
 
       -- Terminal options have no env setting, so env(1) passes the options
       -- to the picker.
-      local bounds, height = picker_bounds(where, urls)
+      local bounds, height, wrap = picker_bounds(where, urls)
+      -- picker.sh gets the layout values that it needs to count the rows
+      -- of wrapped URLs, before their widths.
+      if #wrap > 0 then
+        wrap = layout.url_cols .. " " .. layout.wrap_cols .. " " .. table.concat(wrap, " ")
+      else
+        wrap = ""
+      end
       local _, layer_err = open_popup(where, bounds, {
         "env",
         "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
@@ -373,6 +416,7 @@ function M.setup(opts)
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
         "FZF_URL_HEADER=" .. layout.help,
         "FZF_URL_HEIGHT=" .. height,
+        "FZF_URL_WRAP=" .. wrap,
         "FZF_URL_CACHE=" .. cache_path,
         "FZF_URL_MEASURE=" .. string.format("%s %s %.6f %.6f",
           where.window_id or "none", where.key, bounds[3], bounds[4]),
@@ -397,6 +441,7 @@ M._locate = locate
 M._popup_bounds = popup_bounds
 M._picker_bounds = picker_bounds
 M._list_rows = list_rows
+M._width_of = width_of
 M._layout = layout
 M._limits = function() return max_width, max_height, max_scrollback end
 
