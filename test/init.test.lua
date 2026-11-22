@@ -495,8 +495,11 @@ local function screen(urls, cols, rows, height)
   local f = assert(io.open(file, "w"))
   f:write(table.concat(urls, "\n"), "\n")
   f:close()
-  local socket = "rex-fzf-url-test-" .. os.time() .. "-" .. math.random(1000000)
-  local tmux = "tmux -L " .. q(socket) .. " -f /dev/null "
+  -- A socket path of the test's own, so that it can remove the socket file,
+  -- which kill-server leaves behind.
+  local socket = os.tmpname()
+  os.remove(socket)
+  local tmux = "tmux -S " .. q(socket) .. " -f /dev/null "
   sh(tmux .. "new-session -d -x " .. cols .. " -y " .. rows .. " " .. q(table.concat({
     "env", "FZF_URL_HEADER=" .. q(P._layout.help), "FZF_URL_HEIGHT=" .. height,
     "FZF_DEFAULT_OPTS=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
@@ -510,6 +513,7 @@ local function screen(urls, cols, rows, height)
     sh("sleep 0.05")
   end
   sh(tmux .. "kill-server 2>/dev/null")
+  os.remove(socket)
   os.remove(file)
   local lines = {}
   for line in (text .. "\n"):gmatch("([^\n]*)\n") do lines[#lines + 1] = (line:gsub("%s+$", "")) end
