@@ -164,19 +164,18 @@ check_eq "no opener fails" "1" "$status"
 check_eq "no opener message" 'fzf-url: no opener found (open/xdg-open/$BROWSER)' "$err"
 mv "$TMP/open" "$TMP/xdg-open" "$FAKE/"
 
-# Wait while the pane is still 80x24, for at most 25 tries.
-run "$two" FAKE_STTY="24 80"
-check_eq "waits for the resize" "25" "$(log sleep | wc -l | tr -d ' ')"
-run "$two" FAKE_STTY="30 100"
-check_eq "no wait after the resize" "" "$(log sleep)"
-
-# With a measure spec, start bin/measure.lua in the background.
+# The picker waits for the resize with bin/wait-resize.sh (see
+# wait-resize.test.sh). It passes the cache and the measure spec on.
 run "$two" REX_BLOCK=block:7 FZF_URL_CACHE=/tmp/cache FZF_URL_MEASURE="window:1 k 0.5 0.4"
-for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q '^do ' "$LOG/rex" 2>/dev/null && break; /bin/sleep 0.1; done
-check_eq "starts measure.lua" \
+check_eq "measure.lua gets the cache and the spec" \
   "do $DIR/bin/measure.lua block=block:7 cache=/tmp/cache spec=window:1 k 0.5 0.4" "$(grep '^do ' "$LOG/rex")"
-run "$two"
-check_eq "no measure spec, no measure.lua" "" "$(grep '^do ' "$LOG/rex")"
+run "$two" REX_BLOCK=block:7
+check_eq "no measure spec, measure.lua gets only the block" \
+  "do $DIR/bin/measure.lua block=block:7" "$(grep '^do ' "$LOG/rex")"
+
+# The help text has a default, for an init.lua that does not set it yet.
+run "$three"
+check_eq "header has a default" "Enter: Open URL / CTRL-Y: Copy to clipboard" "$(header)"
 
 run "$two" PATH="$NOFZF:/bin"
 check_eq "no fzf fails" "1" "$status"

@@ -26,9 +26,12 @@ end
 
 -- Run measure.lua with args. replies is a list of what the size method
 -- returns, one for each call. The last reply repeats. Return the number of
--- size calls and sleeps.
+-- size calls and sleeps, and what the script prints.
 local function measure(args, replies)
   local calls, sleeps = 0, 0
+  local printed = {}
+  local real_print = print
+  print = function(...) printed[#printed + 1] = table.concat({ ... }, "\t") end
   rex = {
     args = args,
     block = { call = function(_, method, a)
@@ -38,8 +41,10 @@ local function measure(args, replies)
     end },
     sleep = function() sleeps = sleeps + 1 end,
   }
-  dofile(dir .. "/../bin/measure.lua")
-  return calls, sleeps
+  local ok, err = pcall(dofile, dir .. "/../bin/measure.lua")
+  print = real_print
+  assert(ok, err)
+  return calls, sleeps, table.concat(printed, "\n")
 end
 
 -- A size reply where the app (client 2) owns the popup and wants 80x20.
@@ -52,34 +57,41 @@ local function args(path, spec)
 end
 
 ------------------------------------------------------------------------
--- Bad arguments: no size call, and no cache file.
+-- No block: no size call, and nothing printed.
 
 local path = new_path()
+local calls, _, out = measure({ cache = path, spec = "window:1 k 0.5 0.4" }, { owned })
+H.eq("no block: no size call", calls, 0)
+H.eq("no block: prints nothing", out, "")
+
+-- Without a good cache path and spec: print the size, and save nothing.
 for name, a in pairs({
-  ["no block"] = { cache = path, spec = "window:1 k 0.5 0.4" },
   ["no cache path"] = { block = "block:5", spec = "window:1 k 0.5 0.4" },
   ["no spec"] = { block = "block:5", cache = path },
   ["a spec that is not a string"] = { block = "block:5", cache = path, spec = 3 },
   ["a spec with three fields"] = { block = "block:5", cache = path, spec = "window:1 k 0.5" },
   ["a spec with a width that is not a number"] = { block = "block:5", cache = path, spec = "window:1 k x 0.4" },
 }) do
-  local calls = measure(a, { owned })
-  H.ok(name .. ": no size call", calls == 0, calls .. " calls")
+  calls, _, out = measure(a, { owned })
+  H.eq(name .. ": one size call", calls, 1)
+  H.eq(name .. ": prints the owner's size", out, "20 80")
   H.eq(name .. ": no cache file", read(path), nil)
 end
 
 ------------------------------------------------------------------------
 -- The size method fails: stop, and write nothing.
 
-local calls = measure(args(path), { nil })
+calls, _, out = measure(args(path), { nil })
 H.eq("size fails: one call", calls, 1)
+H.eq("size fails: prints nothing", out, "")
 H.eq("size fails: no cache file", read(path), nil)
 
 ------------------------------------------------------------------------
 -- The app owns the popup at once: save the ranges for the owner's size.
 
-calls = measure(args(path), { owned })
+calls, _, out = measure(args(path), { owned })
 H.eq("owned at once: one call", calls, 1)
+H.eq("owned at once: prints the owner's size, not the other client's", out, "20 80")
 local cache = size.load(path)
 local e = cache["window:1"]
 local cl, ch = size.floating_range(80, 0.5)
@@ -106,9 +118,10 @@ H.ok("owner with no size: waits", calls == 2 and sleeps == 1, calls .. " calls, 
 os.remove(path)
 
 -- No owner for one second: give up, and write nothing.
-calls, sleeps = measure(args(path), { { desired = owned.desired } })
+calls, sleeps, out = measure(args(path), { { desired = owned.desired } })
 H.ok("never owned: gives up after 100 tries", calls == 100 and sleeps == 100,
   calls .. " calls, " .. sleeps .. " sleeps")
+H.eq("never owned: prints nothing", out, "")
 H.eq("never owned: no cache file", read(path), nil)
 
 ------------------------------------------------------------------------

@@ -99,6 +99,7 @@ local max_width, max_height = 0.8, 0.4
 -- change these values together with those options.
 local layout = {
   -- The help text below the prompt. picker.sh gets it in FZF_URL_HEADER.
+  -- picker.sh has the same text as its default. Change them together.
   help = "Enter: Open URL / CTRL-Y: Copy to clipboard",
   -- The blank columns on each side of the longest line. On the left, they
   -- are --padding 0,0,0,1, the pointer, and the mark for a selected URL.
@@ -133,12 +134,18 @@ local function leaves(node, out)
   return out
 end
 
--- Return the size of a terminal block: the size the app wants for it, as
--- the block's own size can differ when another client controls it.
+-- Return the size of a terminal block: the size that its owner wants for
+-- it, as the block's own size can differ when another client controls it.
+-- Other clients can want other sizes. With no owner, take the first size.
 local function block_size(block_id)
   local s = rex.block.call(terminal, "size", { block_id = block_id })
   if s == nil then return nil end
-  return (s.desired and s.desired[1]) or s
+  local first
+  for _, d in ipairs(s.desired or {}) do
+    if d.client_id == s.owner then return d end
+    first = first or d
+  end
+  return first or s
 end
 
 -- Return what the popups need to know about block_id: the window that holds

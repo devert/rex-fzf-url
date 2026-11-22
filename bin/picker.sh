@@ -11,7 +11,8 @@
 #   FZF_URL_FZF_PATH     the full path of fzf (default: fzf in PATH)
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
-#   FZF_URL_HEADER       the help text below the prompt
+#   FZF_URL_HEADER       the help text below the prompt (default: the text
+#                        in the layout table of init.lua)
 #   FZF_URL_HEIGHT       the rows that fzf needs, with wrapped URLs
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
@@ -97,26 +98,15 @@ fi
 # floating pane. The pane can be one or two rows taller than that, and the
 # extra rows are then at the bottom. Two extra rows can happen in the first
 # popup in a window, before bin/measure.lua saves the size of the window.
-# The terminal starts at the default size of 80x24, and the app sets the size
-# of the pane shortly after it opens. fzf draws in place with --height, so
-# lines that it draws before the resize stay on the screen. So wait for the
-# resize, for at most half a second.
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
-    [[ "$(stty size 2>/dev/null)" != "24 80" ]] && break
-    sleep 0.02
-done
+# Wait for the app to resize the pane, as fzf draws in place with --height,
+# so lines that it draws before the resize stay on the screen. This also
+# saves the size of the pane (see bin/wait-resize.sh).
+. "${0%/*}/wait-resize.sh"
+wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}"
 
 # With more URLs than fit, fzf limits --height to the pane height, so it
 # fills the pane and scrolls the list. Without a height, fill the pane.
 height=${FZF_URL_HEIGHT:-100%}
-
-# Save the size that the app gives this pane, so that later popups in this
-# window fit their content more closely. This runs in the background, so fzf starts
-# at once. It doesn't change this pane. Rex sets REX_BLOCK in its panes.
-if [[ -n "${FZF_URL_MEASURE:-}" && -n "${FZF_URL_CACHE:-}" && -n "${REX_BLOCK:-}" ]]; then
-    "${REX_BIN_DIR:+$REX_BIN_DIR/}rex" do "${0%/*}/measure.lua" block="$REX_BLOCK" \
-        cache="$FZF_URL_CACHE" spec="$FZF_URL_MEASURE" >/dev/null 2>&1 &
-fi
 
 # --no-border, --no-margin, and --no-padding stop FZF_DEFAULT_OPTS from adding
 # rows that the popup size does not count. Those rows hide part of the URL list.
@@ -132,7 +122,7 @@ fi
 selection=$(printf '%s\n' "$urls" | "$fzf" \
     --multi --no-margin --no-padding --no-border --wrap \
     --expect ctrl-y --style default \
-    --header "${FZF_URL_HEADER:-}" \
+    --header "${FZF_URL_HEADER-Enter: Open URL / CTRL-Y: Copy to clipboard}" \
     --header-border top --header-first \
     --highlight-line --info inline-right \
     --padding 0,0,0,1 \

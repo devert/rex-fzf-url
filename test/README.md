@@ -35,6 +35,7 @@ Each test file tests one source file:
 - `extract-urls.test.sh` tests `bin/extract-urls.pl`.
 - `picker.test.sh` tests `bin/picker.sh`.
 - `message.test.sh` tests `bin/message.sh`.
+- `wait-resize.test.sh` tests `bin/wait-resize.sh`.
 
 `harness.lua` and `harness.sh` hold the checks that the test files share.
 
@@ -42,7 +43,7 @@ Give a new test file the name of its source file without the extension, then `.t
 
 ## Coverage
 
-Coverage shows which lines of code the tests ran. luacov measures `init.lua`, `lib/popup-size.lua`, and `bin/measure.lua`. Devel::Cover measures `bin/extract-urls.pl`. kcov measures `bin/picker.sh` and `bin/message.sh`.
+Coverage shows which lines of code the tests ran. luacov measures `init.lua`, `lib/popup-size.lua`, and `bin/measure.lua`. Devel::Cover measures `bin/extract-urls.pl`. kcov measures `bin/picker.sh`, `bin/message.sh`, and `bin/wait-resize.sh`.
 
 ### Install the coverage tools
 

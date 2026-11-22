@@ -223,6 +223,11 @@ local function run_locate(block_id, windows, sizes)
       local s = sizes[args.block_id]
       if s == nil then return nil end
       if s.old then return { columns = s[1], rows = s[2] } end
+      -- With other, another client comes first and wants another size.
+      if s.other then
+        return { owner = 2, desired = { { client_id = 1, columns = 99, rows = 99 },
+          { client_id = 2, columns = s[1], rows = s[2] } } }
+      end
       return { desired = { { columns = s[1], rows = s[2] } } }
     end },
   }, function(m) return m._locate(block_id) end)
@@ -244,6 +249,10 @@ range_is("one pane: rows", w.rows, 40.1, 43.5)
 
 w = run_locate("block:1", one, { ["block:1"] = { 150, 40, old = true } })
 range_is("a server with no desired size", w.cols, 151.5, 153.5)
+
+w = run_locate("block:1", one, { ["block:1"] = { 150, 40, other = true } })
+range_is("another client: the owner's columns", w.cols, 151.5, 153.5)
+range_is("another client: the owner's rows", w.rows, 40.1, 43.5)
 
 w = run_locate("block:9", one, { ["block:1"] = { 150, 40 } })
 H.eq("unknown block: no window", w.window_id, nil)
@@ -508,9 +517,12 @@ local function screen(urls, cols, rows, height)
   local socket = os.tmpname()
   os.remove(socket)
   local tmux = "tmux -S " .. q(socket) .. " -f /dev/null "
+  -- Clear the fzf options of the user, which change the layout. Clear
+  -- REX_BLOCK, so that the picker does not wait for the size of the Rex pane
+  -- that runs the tests.
   sh(tmux .. "new-session -d -x " .. cols .. " -y " .. rows .. " " .. q(table.concat({
     "env", "FZF_URL_HEADER=" .. q(P._layout.help), "FZF_URL_HEIGHT=" .. height,
-    "FZF_DEFAULT_OPTS=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
+    "FZF_DEFAULT_OPTS=", "FZF_DEFAULT_OPTS_FILE=", "REX_BLOCK=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
   }, " ")))
   local text = ""
   for _ = 1, 50 do
@@ -525,6 +537,9 @@ local function screen(urls, cols, rows, height)
   os.remove(file)
   local lines = {}
   for line in (text .. "\n"):gmatch("([^\n]*)\n") do lines[#lines + 1] = (line:gsub("%s+$", "")) end
+  -- When tmux or fzf fails, the capture is empty. Pad the screen with blank
+  -- lines, so that the checks fail instead of the test file stopping.
+  for i = #lines + 1, rows do lines[i] = "" end
   return lines
 end
 
