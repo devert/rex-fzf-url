@@ -465,6 +465,15 @@ def.run({ block_id = "block:1" }, {})
 H.eq("unset options pass empty values", env(command(log), "FZF_URL_OPEN_CMD"), "")
 os.remove(command(log)[#command(log)])
 
+def, log = action({ open_cmd = {}, copy_cmd = 1, fzf_path = true, fzf_options = false },
+  { exec = { ok = true, stdout = "https://a.example.com\n" } })
+def.run({ block_id = "block:1" }, {})
+cmd = command(log)
+H.ok("options that are not strings pass empty values",
+  env(cmd, "FZF_URL_OPEN_CMD") == "" and env(cmd, "FZF_URL_COPY_CMD") == ""
+  and env(cmd, "FZF_URL_FZF_PATH") == "" and env(cmd, "FZF_URL_FZF_OPTIONS") == "")
+os.remove(cmd[#cmd])
+
 -- The URL file is removed when the popup fails to open.
 def, log = action({}, { exec = { ok = true, stdout = "https://a.example.com\n" }, layer_err = "no window" })
 H.raises("popup fails to open", "fzf-url: no window", def.run, { block_id = "block:1" }, {})

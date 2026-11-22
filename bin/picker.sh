@@ -38,10 +38,25 @@ fail() {
 # folders that shell startup files add. So add the folders where fzf and
 # other tools are usually installed. They go last, so PATH still wins.
 # FZF_URL_EXTRA_PATH replaces the list, for the tests.
-PATH="$PATH:${FZF_URL_EXTRA_PATH-/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$HOME/.local/share/mise/shims}"
+# An empty part in PATH means the current folder, so join only the parts
+# that are not empty.
+extra=${FZF_URL_EXTRA_PATH-/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$HOME/.local/share/mise/shims}
+PATH=${PATH:+$PATH${extra:+:}}$extra
+
+# Read and remove the URL file first, so that no failure leaves it behind.
+url_file="${1:-}"
+[[ -n "$url_file" && -f "$url_file" ]] || fail "no URL list file"
+urls=$(<"$url_file")
+rm -f "$url_file"
 
 if [[ -n "${FZF_URL_FZF_PATH:-}" ]]; then
-    fzf=${FZF_URL_FZF_PATH/#\~/$HOME}
+    fzf=$FZF_URL_FZF_PATH
+    # Expand only `~` and `~/...`. `~name` is left as it is.
+    case $fzf in '~' | '~/'*) fzf=$HOME${fzf#\~} ;; esac
+    # A name without a slash is a command in PATH.
+    if [[ "$fzf" != */* ]]; then
+        fzf=$(type -P "$fzf") || fail "fzf_path not found in PATH: $FZF_URL_FZF_PATH"
+    fi
     [[ -f "$fzf" && -x "$fzf" ]] || fail "fzf_path is not an executable file: $FZF_URL_FZF_PATH"
 else
     fzf=fzf
@@ -49,10 +64,6 @@ else
         fail "fzf not found. Set fzf_path in setup() to the full path of fzf."
 fi
 
-url_file="${1:-}"
-[[ -n "$url_file" && -f "$url_file" ]] || fail "no URL list file"
-urls=$(<"$url_file")
-rm -f "$url_file"
 [[ -z "$urls" ]] && exit 0
 
 # Draw fzf from the top of the pane, as tall as its content: the rows of the

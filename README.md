@@ -79,7 +79,7 @@ The command that copies text to the clipboard, such as `"pbcopy"`.
 
 ### `fzf_path`
 
-The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. A leading `~` is your home folder.
+The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. A leading `~/` is your home folder. A name without a `/`, such as `"fzf"`, is a command that the picker looks for in `PATH` and in the folders below.
 
 The picker does not start a shell, so your shell startup files do not change its `PATH`. It gets the `PATH` of the Rex app. When you start Rex from the Finder or the Dock, that `PATH` holds only the system folders. So the picker also searches these folders, after `PATH`:
 

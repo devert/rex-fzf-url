@@ -160,6 +160,17 @@ check_eq "no measure spec, no measure.lua" "" "$(grep '^do ' "$LOG/rex")"
 run "$two" PATH="$NOFZF:/bin"
 check_eq "no fzf fails" "1" "$status"
 check_eq "no fzf message" "fzf-url: fzf not found. Set fzf_path in setup() to the full path of fzf." "$err"
+check_eq "no fzf removes the URL file" "no" "$([[ -e "$url_file" ]] && echo yes || echo no)"
+
+# An empty FZF_URL_EXTRA_PATH or PATH must not add the current folder to PATH.
+mkdir -p "$TMP/cwd"
+cp "$FAKE/fzf" "$TMP/cwd/fzf"
+cd "$TMP/cwd" || exit 1
+run "$two" PATH="$NOFZF:/bin"
+check_eq "empty extra path does not search the current folder" "1" "$status"
+run "$two" PATH= FZF_URL_EXTRA_PATH="$NOFZF:/bin"
+check_eq "empty PATH does not search the current folder" "1" "$status"
+cd "$DIR" || exit 1
 
 # Without fzf in PATH, find it in the usual install folders, after PATH.
 run "$two" PATH="$NOFZF:/bin" FZF_URL_EXTRA_PATH="$TMP/missing:$FAKE"
@@ -180,6 +191,21 @@ check_eq "fzf_path that is a folder message" \
 run "$two" FZF_URL_FZF_PATH="$TMP/nothing"
 check_eq "fzf_path that is missing fails" "1" "$status"
 check_eq "fzf_path that is missing does not run fzf" "" "$(log fzf.in)"
+check_eq "fzf_path that is missing removes the URL file" "no" "$([[ -e "$url_file" ]] && echo yes || echo no)"
+
+# Only `~` and `~/` are the home folder. `~name` is left as it is.
+mkdir -p "$TMP/home/foo"
+cp "$FAKE/fzf" "$TMP/home/foo/fzf"
+run "$two" PATH="$NOFZF:/bin" HOME="$TMP/home/" FZF_URL_FZF_PATH="~foo/fzf"
+check_eq "fzf_path with ~name is not expanded" "1" "$status"
+check_eq "fzf_path with ~name message" "fzf-url: fzf_path is not an executable file: ~foo/fzf" "$err"
+
+# A name without a slash is found in PATH.
+run "$two" PATH="$NOFZF:/bin" FZF_URL_EXTRA_PATH="$TMP/home/apps" FZF_URL_FZF_PATH="myfzf"
+check_eq "fzf_path name in PATH is used" "$two" "$(log fzf.in)"
+run "$two" PATH="$NOFZF:/bin" FZF_URL_FZF_PATH="nofzf"
+check_eq "fzf_path name not in PATH fails" "1" "$status"
+check_eq "fzf_path name not in PATH message" "fzf-url: fzf_path not found in PATH: nofzf" "$err"
 
 picker "$TMP/none"
 check_eq "a missing URL file fails" "1" "$status"
