@@ -40,7 +40,14 @@ fail() {
 # FZF_URL_EXTRA_PATH replaces the list, for the tests.
 # An empty part in PATH means the current folder, so join only the parts
 # that are not empty.
-extra=${FZF_URL_EXTRA_PATH-/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$HOME/.nix-profile/bin:$HOME/.local/share/mise/shims}
+default_extra="/opt/homebrew/bin:/usr/local/bin" # Homebrew
+default_extra+=":/opt/local/bin"                 # MacPorts
+default_extra+=":$HOME/.fzf/bin"                 # the fzf install script
+default_extra+=":$HOME/.local/bin"
+default_extra+=":$HOME/.nix-profile/bin"         # Nix
+default_extra+=":/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-system/sw/bin" # nix-darwin
+default_extra+=":$HOME/.local/share/mise/shims"  # mise
+extra=${FZF_URL_EXTRA_PATH-$default_extra}
 PATH=${PATH:+$PATH${extra:+:}}$extra
 
 # Read and remove the URL file first, so that no failure leaves it behind.

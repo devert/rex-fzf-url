@@ -79,19 +79,11 @@ The command that copies text to the clipboard, such as `"pbcopy"`.
 
 ### `fzf_path`
 
-The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. A leading `~/` is your home folder. A name without a `/`, such as `"fzf"`, is a command that the picker looks for in `PATH` and in the folders below.
+The path of fzf, such as `"/opt/homebrew/bin/fzf"`. A leading `~/` is your home folder. Set this only when the picker cannot find fzf.
 
-The picker does not start a shell, so your shell startup files do not change its `PATH`. It gets the `PATH` of the Rex app. When you start Rex from the Finder or the Dock, that `PATH` holds only the system folders. So the picker also searches these folders, after `PATH`:
+The picker does not get the `PATH` from your shell. So it also searches the usual install folders of Homebrew, MacPorts, Nix, mise, and the fzf install script, after `PATH`. The picker uses the same folders to find `open_cmd`, `copy_cmd`, and a `fzf_path` without a `/`.
 
-- `/opt/homebrew/bin`
-- `/usr/local/bin`
-- `~/.local/bin`
-- `~/.nix-profile/bin`
-- `~/.local/share/mise/shims`
-
-If fzf is in a different folder, set this option. The picker also uses these folders to find the commands in `open_cmd` and `copy_cmd`.
-
-**Default**: the first `fzf` in `PATH` or in the folders above.
+**Default**: the first `fzf` in `PATH` or in the install folders.
 
 ### `fzf_options`
 
