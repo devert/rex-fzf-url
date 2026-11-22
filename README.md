@@ -87,7 +87,7 @@ The full path of fzf, such as `"/opt/homebrew/bin/fzf"`. Set this only when the 
 
 Extra flags for fzf. For example, `"--no-wrap"` stops long URLs from wrapping.
 
-The picker resets the fzf border, margin, and padding, even when `FZF_DEFAULT_OPTS` sets them. They add rows that the popup size does not count, so they hide part of the URL list. A `--border`, `--margin`, or `--padding` in this option has the same effect.
+The picker resets the fzf border, margin, padding, preview, footer, and header lines, even when `FZF_DEFAULT_OPTS` sets them. They add rows that the popup size does not count, so they hide part of the URL list. A `--border`, `--margin`, `--padding`, `--preview`, `--footer`, or `--header-lines` in this option has the same effect.
 
 **Default**: none.
 

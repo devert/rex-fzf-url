@@ -165,8 +165,16 @@ if wait_resize "${FZF_URL_CACHE:-}" "${FZF_URL_MEASURE:-}" && height=$(fzf_heigh
     height_args=(--height "$height")
 fi
 
-# --no-border, --no-margin, and --no-padding stop FZF_DEFAULT_OPTS from adding
-# rows that the popup size does not count. Those rows hide part of the URL list.
+# fzf 0.63 added the footer. An older fzf fails on --no-footer, and it cannot
+# have a footer in FZF_DEFAULT_OPTS. fzf checks all options before it prints
+# --version, so this tells if fzf knows --no-footer.
+no_footer=()
+"$fzf" --no-footer --version >/dev/null 2>&1 && no_footer=(--no-footer)
+
+# --no-border, --no-margin, --no-padding, --no-preview, --no-header-lines, and
+# --no-footer stop FZF_DEFAULT_OPTS from adding rows that the popup size does
+# not count. Those rows hide part of the URL list. --no-header-lines also
+# keeps the first URL selectable.
 # --multi lets Tab select more than one URL. --wrap wraps a long URL onto more
 # rows instead of cutting it off. fzf_height counts those extra rows.
 # The padding, the header, and its border set the layout that init.lua sizes
@@ -178,6 +186,7 @@ fi
 # shellcheck disable=SC2086
 selection=$(printf '%s\n' "$urls" | "$fzf" \
     --multi --no-margin --no-padding --no-border --wrap \
+    --no-preview --no-header-lines ${no_footer[@]+"${no_footer[@]}"} \
     --expect ctrl-y --style default \
     --header "${FZF_URL_HEADER-Enter: Open URL / CTRL-Y: Copy to clipboard}" \
     --header-border top --header-first \

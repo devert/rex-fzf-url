@@ -581,8 +581,9 @@ local function q(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
 local function chars(s) return select(2, s:gsub("[^\128-\191]", "")) end
 
 -- Run picker.sh on urls in a tmux pane of cols x rows. Return the lines of
--- the screen, without blank space at the end of each line.
-local function screen(urls, cols, rows, height, wrap)
+-- the screen, without blank space at the end of each line. default_opts is
+-- the FZF_DEFAULT_OPTS of the user (default: none).
+local function screen(urls, cols, rows, height, wrap, default_opts)
   local file = os.tmpname()
   local f = assert(io.open(file, "w"))
   f:write(table.concat(urls, "\n"), "\n")
@@ -597,7 +598,7 @@ local function screen(urls, cols, rows, height, wrap)
   -- that runs the tests.
   sh(tmux .. "new-session -d -x " .. cols .. " -y " .. rows .. " " .. q(table.concat({
     "env", "FZF_URL_HEADER=" .. q(P._layout.help), "FZF_URL_HEIGHT=" .. height,
-    "FZF_URL_WRAP=" .. q(wrap or ""), "FZF_DEFAULT_OPTS=", "FZF_DEFAULT_OPTS_FILE=", "REX_BLOCK=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
+    "FZF_URL_WRAP=" .. q(wrap or ""), "FZF_DEFAULT_OPTS=" .. q(default_opts or ""), "FZF_DEFAULT_OPTS_FILE=", "REX_BLOCK=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
   }, " ")))
   local text = ""
   for _ = 1, 50 do
@@ -646,6 +647,24 @@ else
     lines[height], string.rep(" ", side) .. L.help)
   H.eq("layout: the help text has side_cols blank columns on the right",
     cols - chars(lines[height]), side)
+
+  -- fzf options of the user that add rows. picker.sh turns them off, so
+  -- the URLs still fill the list rows, and the help text is the last row.
+  for _, opts in ipairs({
+    "--border --margin=1 --padding=1",
+    "--footer=foot",
+    "--header-lines=1",
+    "--preview=echo --preview-window=down:2",
+  }) do
+    lines = screen(urls, cols, height, height, nil, opts)
+    H.eq("layout: the URLs fill the list rows with FZF_DEFAULT_OPTS=" .. opts, url_rows(lines), #urls)
+    -- A header line is not an item, so fzf counts one URL less.
+    local count = #urls .. "/" .. #urls
+    H.eq("layout: each URL is an item with FZF_DEFAULT_OPTS=" .. opts,
+      table.concat(lines, "\n"):find(count, 1, true) ~= nil, true)
+    H.eq("layout: the help text is the last row with FZF_DEFAULT_OPTS=" .. opts,
+      lines[height], string.rep(" ", side) .. L.help)
+  end
 
   -- A URL longer than the help text: it is the longest line.
   local long = "https://example.com/" .. string.rep("a", 50)

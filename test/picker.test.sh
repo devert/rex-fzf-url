@@ -22,8 +22,11 @@ fake() {
 }
 
 # fzf logs its arguments and input, then prints $FAKE_FZF_OUTPUT (with
-# backslash escapes) and exits with $FAKE_FZF_EXIT.
-fake fzf 'printf "%s\n" "$@" >"$LOG/fzf.args"; cat >"$LOG/fzf.in"; printf "%b" "${FAKE_FZF_OUTPUT:-}"; exit "${FAKE_FZF_EXIT:-0}"'
+# backslash escapes) and exits with $FAKE_FZF_EXIT. With --version, it logs
+# its arguments to fzf.version, and fails when $FAKE_FZF_OLD is set, as an
+# fzf older than 0.63 fails on --no-footer.
+fake fzf 'if [[ " $* " == *" --version "* ]]; then printf "%s\n" "$*" >>"$LOG/fzf.version"; [[ -z "${FAKE_FZF_OLD:-}" ]]; exit; fi
+printf "%s\n" "$@" >"$LOG/fzf.args"; cat >"$LOG/fzf.in"; printf "%b" "${FAKE_FZF_OUTPUT:-}"; exit "${FAKE_FZF_EXIT:-0}"'
 fake open 'printf "%s\n" "$*" >>"$LOG/open"'
 fake myopen 'printf "%s\n" "$*" >>"$LOG/myopen"'
 # envopen logs the URL, HOME, and PATH that it gets.
@@ -196,6 +199,15 @@ run "$two" FZF_DEFAULT_OPTS='--border --margin=2 --padding=2'
 check_eq "no border when FZF_DEFAULT_OPTS sets one" "--no-border" "$(log fzf.args | grep -x -- --no-border)"
 check_eq "no margin when FZF_DEFAULT_OPTS sets one" "--no-margin" "$(log fzf.args | grep -x -- --no-margin)"
 check_eq "no padding when FZF_DEFAULT_OPTS sets one" "--no-padding" "$(log fzf.args | grep -x -- --no-padding)"
+
+run "$two" FZF_DEFAULT_OPTS='--preview=echo --header-lines=1 --footer=foot'
+check_eq "no preview when FZF_DEFAULT_OPTS sets one" "--no-preview" "$(log fzf.args | grep -x -- --no-preview)"
+check_eq "no header lines when FZF_DEFAULT_OPTS sets them" "--no-header-lines" "$(log fzf.args | grep -x -- --no-header-lines)"
+check_eq "fzf is asked if it knows --no-footer" "--no-footer --version" "$(log fzf.version)"
+check_eq "no footer when FZF_DEFAULT_OPTS sets one" "--no-footer" "$(log fzf.args | grep -x -- --no-footer)"
+run "$two" FAKE_FZF_OLD=1 FAKE_FZF_OUTPUT='\nhttps://a.example.com\n'
+check_eq "an fzf older than 0.63 does not get --no-footer" "" "$(log fzf.args | grep -x -- --no-footer)"
+check_eq "an fzf older than 0.63 still opens the URL" "https://a.example.com" "$(log open)"
 
 # Without open, use xdg-open, then $BROWSER.
 mv "$FAKE/open" "$TMP/open"
