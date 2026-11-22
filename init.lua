@@ -368,6 +368,7 @@ M._locate = locate
 M._popup_bounds = popup_bounds
 M._picker_bounds = picker_bounds
 M._list_rows = list_rows
+M._layout = layout
 M._limits = function() return max_width, max_height, max_scrollback end
 
 return M

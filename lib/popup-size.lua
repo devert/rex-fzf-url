@@ -22,10 +22,11 @@
 -- hold both cases.
 --
 -- Rex 0.1.0-preview.21 (November 2026) pads the bottom of a floating pane
--- less. At a window of 154x38 cells in a full tiled pane, 150 floating panes
--- from 0.1 to 1.0 of the window found a column inset of 2.08 to 2.12 cells,
--- as before, but a row inset of only 1.63 to 1.67 rows. W was 156.84 to
--- 156.91 columns and 40.24 to 40.29 rows.
+-- less. Floating panes from 0.1 to 1.0 of the window, at four window sizes
+-- from 116x29 to 180x40 cells of W, with the sidebar shown and hidden,
+-- found a column inset of 2.01 to 2.14 cells, as before, but a row inset of
+-- only 1.62 to 1.685 rows. A full tiled pane got 0.8 to 2.3 rows less than
+-- W, within the range below.
 
 local M = {}
 

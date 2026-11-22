@@ -469,4 +469,102 @@ H.raises("popup fails to open", "fzf-url: no window", def.run, { block_id = "blo
 cmd = command(log)
 H.eq("URL file is removed when the popup fails", io.open(cmd[#cmd]), nil)
 
+------------------------------------------------------------------------
+-- The layout values against real fzf
+--
+-- Run bin/picker.sh with real fzf in a detached tmux session of a set
+-- size, and read the screen. This catches an fzf version or a change to the
+-- fzf options in picker.sh that draws the picker differently from what the
+-- layout table in init.lua says. Skip it when tmux or fzf is missing.
+
+local function sh(cmd)
+  local r = os.execute(cmd)
+  return r == 0 or r == true
+end
+
+-- Quote s for the shell.
+local function q(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+
+-- The number of characters in a UTF-8 string.
+local function chars(s) return select(2, s:gsub("[^\128-\191]", "")) end
+
+-- Run picker.sh on urls in a tmux pane of cols x rows. Return the lines of
+-- the screen, without blank space at the end of each line.
+local function screen(urls, cols, rows, height)
+  local file = os.tmpname()
+  local f = assert(io.open(file, "w"))
+  f:write(table.concat(urls, "\n"), "\n")
+  f:close()
+  local socket = "rex-fzf-url-test-" .. os.time() .. "-" .. math.random(1000000)
+  local tmux = "tmux -L " .. q(socket) .. " -f /dev/null "
+  sh(tmux .. "new-session -d -x " .. cols .. " -y " .. rows .. " " .. q(table.concat({
+    "env", "FZF_URL_HEADER=" .. q(P._layout.help), "FZF_URL_HEIGHT=" .. height,
+    "FZF_DEFAULT_OPTS=", "/bin/bash", q(dir .. "/../bin/picker.sh"), q(file),
+  }, " ")))
+  local text = ""
+  for _ = 1, 50 do
+    local p = io.popen(tmux .. "capture-pane -p 2>/dev/null")
+    text = p:read("*a")
+    p:close()
+    if text:find("%d+/%d+") then break end -- the match count, as in 3/3
+    sh("sleep 0.05")
+  end
+  sh(tmux .. "kill-server 2>/dev/null")
+  os.remove(file)
+  local lines = {}
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do lines[#lines + 1] = (line:gsub("%s+$", "")) end
+  return lines
+end
+
+-- Return the number of rows with text above the first separator line: the
+-- URL rows. The list area can have blank rows above them.
+local function url_rows(lines)
+  local n = 0
+  for _, line in ipairs(lines) do
+    if line:find("^%s*\226\148\128") then break end -- a line of box-drawing dashes
+    if line:find("%S") then n = n + 1 end
+  end
+  return n
+end
+
+if not (sh("command -v tmux >/dev/null 2>&1") and sh("command -v fzf >/dev/null 2>&1")) then
+  print("skip: the layout tests need tmux and fzf")
+else
+  local L = P._layout
+  local side = L.side_cols
+
+  -- Short URLs: the help text is the longest line.
+  local urls = { "https://a.example.com/one", "https://b.example.com/two", "https://c.example.com" }
+  local cols = #L.help + 2 * side
+  local height = P._list_rows(urls, cols) + L.extra_rows
+  local lines = screen(urls, cols, height, height)
+  H.eq("layout: fzf uses the rows of the list plus extra_rows", lines[height]:match("%S") ~= nil, true)
+  H.eq("layout: the URLs fill the list rows", url_rows(lines), #urls)
+  H.eq("layout: the help text is the last row and is not cut off",
+    lines[height], string.rep(" ", side) .. L.help)
+  H.eq("layout: the help text has side_cols blank columns on the right",
+    cols - chars(lines[height]), side)
+
+  -- A URL longer than the help text: it is the longest line.
+  local long = "https://example.com/" .. string.rep("a", 50)
+  cols = #long + 2 * side
+  height = P._list_rows({ long }, cols) + L.extra_rows
+  lines = screen({ long }, cols, height, height)
+  H.eq("layout: a URL that is the longest line fits on one row", url_rows(lines), 1)
+  H.eq("layout: the longest URL has side_cols blank columns on the right", cols - chars(lines[1]), side)
+  H.eq("layout: the longest URL starts after side_cols columns", lines[1]:sub(-#long), long)
+
+  -- URLs at the wrap width and longer: list_rows counts the rows that fzf
+  -- uses, which tests url_cols and wrap_cols.
+  cols = 40
+  for _, n in ipairs({ cols - L.url_cols, cols - L.url_cols + 1, 100 }) do
+    local url = "https://example.com/" .. string.rep("b", n - 20)
+    local want = P._list_rows({ url }, cols)
+    height = want + L.extra_rows
+    lines = screen({ url }, cols, height, height)
+    H.eq("layout: a " .. n .. "-character URL at " .. cols .. " columns takes " .. want .. " rows",
+      url_rows(lines), want)
+  end
+end
+
 H.done()

@@ -40,6 +40,10 @@ for _, m in ipairs({
   { 47.62, 1, 45, true }, { 48.38, 1, 45, true },
   -- Rex 0.1.0-preview.21, 154x38 cells in a full tiled pane.
   { 156.84, 1, 154 }, { 156.91, 1, 154 }, { 40.24, 1, 38, true }, { 40.29, 1, 38, true },
+  -- Rex 0.1.0-preview.21 with the sidebar hidden: 38 rows, 28 rows in a
+  -- small window, and 38 rows at full screen.
+  { 38.91, 1, 38, true }, { 39.02, 1, 38, true }, { 28.815, 1, 28, true }, { 28.88, 1, 28, true },
+  { 40.28, 1, 38, true }, { 40.32, 1, 38, true },
 }) do
   local low, high = size.tiled_range(m[3], m[2], m[4] == true)
   check(string.format("tiled range for %d %s at %.2f holds %.3f", m[3], m[4] and "rows" or "columns", m[2], m[1]),
@@ -60,19 +64,36 @@ for _, m in ipairs({
     low <= m[1] and m[1] < high, string.format("range %.3f %.3f", low, high))
 end
 
--- Floating panes measured in Rex 0.1.0-preview.21: the fraction of the
--- window, and the columns and rows that the pane got. W was 156.84 to 156.91
--- columns and 40.24 to 40.29 rows. Each range must hold both ends.
-for _, m in ipairs({
-  { 0.100, 13, 2 }, { 0.198, 28, 6 }, { 0.303, 45, 10 }, { 0.408, 61, 14 }, { 0.513, 78, 19 },
-  { 0.618, 94, 23 }, { 0.723, 111, 27 }, { 0.828, 127, 31 }, { 0.933, 144, 35 }, { 1, 154, 38 },
+-- Floating panes measured in Rex 0.1.0-preview.21 at four window sizes:
+-- the range of W in columns and in rows that fits all the panes, and
+-- samples of the fraction of the window, and the columns and rows that the
+-- pane got. Each range must hold both ends of W.
+for _, win in ipairs({
+  { name = "154x38, sidebar shown", cols = { 156.84, 156.91 }, rows = { 40.24, 40.29 }, panes = {
+    { 0.100, 13, 2 }, { 0.198, 28, 6 }, { 0.303, 45, 10 }, { 0.408, 61, 14 }, { 0.513, 78, 19 },
+    { 0.618, 94, 23 }, { 0.723, 111, 27 }, { 0.828, 127, 31 }, { 0.933, 144, 35 }, { 1, 154, 38 },
+  } },
+  { name = "sidebar hidden", cols = { 180.025, 180.35 }, rows = { 38.91, 39.02 }, panes = {
+    { 0.10, 15, 2 }, { 0.25, 42, 8 }, { 0.40, 70, 13 }, { 0.55, 97, 19 }, { 0.70, 124, 25 },
+    { 0.85, 151, 31 }, { 1, 178, 37 },
+  } },
+  { name = "small, sidebar hidden", cols = { 116.075, 116.17 }, rows = { 28.815, 28.88 }, panes = {
+    { 0.10, 9, 1 }, { 0.25, 26, 5 }, { 0.40, 44, 9 }, { 0.55, 61, 14 }, { 0.70, 79, 18 },
+    { 0.85, 96, 22 }, { 1, 114, 27 },
+  } },
+  { name = "full screen", cols = { 180.025, 180.35 }, rows = { 40.28, 40.32 }, panes = {
+    { 0.10, 15, 2 }, { 0.25, 42, 8 }, { 0.40, 70, 14 }, { 0.55, 97, 20 }, { 0.70, 124, 26 },
+    { 0.85, 151, 32 }, { 1, 178, 38 },
+  } },
 }) do
-  local low, high = size.floating_range(m[2], m[1], false)
-  check(string.format("floating range for %d columns at %.3f", m[2], m[1]),
-    low <= 156.84 and 156.91 < high, string.format("range %.3f %.3f", low, high))
-  low, high = size.floating_range(m[3], m[1], true)
-  check(string.format("floating range for %d rows at %.3f", m[3], m[1]),
-    low <= 40.24 and 40.29 < high, string.format("range %.3f %.3f", low, high))
+  for _, m in ipairs(win.panes) do
+    local low, high = size.floating_range(m[2], m[1], false)
+    check(string.format("%s: floating range for %d columns at %.3f", win.name, m[2], m[1]),
+      low <= win.cols[1] and win.cols[2] < high, string.format("range %.3f %.3f", low, high))
+    low, high = size.floating_range(m[3], m[1], true)
+    check(string.format("%s: floating range for %d rows at %.3f", win.name, m[3], m[1]),
+      low <= win.rows[1] and win.rows[2] < high, string.format("range %.3f %.3f", low, high))
+  end
 end
 
 -- A floating pane's range holds every window size that gives its cells.

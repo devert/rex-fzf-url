@@ -18,7 +18,7 @@ test/install-coverage-tools.sh # one-time install of coverage tools (Homebrew)
 rex config reload              # reload the plugin in a running Rex
 ```
 
-The tests do not need Rex. Lua tests replace the `rex` global with a fake table. Bash tests put fake `fzf`, `rex`, clipboard, and opener programs on `PATH`. Each source file has one test file named `<source name>.test.lua` or `.test.sh`. `run.sh` finds tests by that pattern. Each test file must end by printing `N passed, M failed` as its last line (use `H.done()` from `test/harness.lua` or `finish` from `test/harness.sh`), because `run.sh` parses it.
+The tests do not need Rex. Lua tests replace the `rex` global with a fake table. Bash tests put fake `fzf`, `rex`, clipboard, and opener programs on `PATH`. The layout tests at the end of `test/init.test.lua` are the exception: they run `bin/picker.sh` with real fzf in a detached tmux session, and check the `layout` values in `init.lua` against the screen. They skip when tmux or fzf is missing. If you change the fzf options in `picker.sh`, update `layout` until these tests pass. Each source file has one test file named `<source name>.test.lua` or `.test.sh`. `run.sh` finds tests by that pattern. Each test file must end by printing `N passed, M failed` as its last line (use `H.done()` from `test/harness.lua` or `finish` from `test/harness.sh`), because `run.sh` parses it.
 
 ## Compatibility constraints
 
