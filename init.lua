@@ -18,8 +18,11 @@ local plugin_dir = (debug.getinfo(1, "S").source:gsub("^@", ""):match("^(.*)/[^/
 local popup_size = dofile(plugin_dir .. "/lib/popup-size.lua")
 
 -- The file where bin/measure.lua keeps the window sizes that popups measured.
+-- The number in the name is the version of the size model in
+-- lib/popup-size.lua. Increase it when a change to that model makes the
+-- saved ranges wrong, so that the plugin starts with no saved sizes.
 local cache_path = (os.getenv("TMPDIR") or "/tmp"):gsub("/$", "")
-  .. "/rex-fzf-url-" .. (os.getenv("USER") or "user") .. ".sizes"
+  .. "/rex-fzf-url-" .. (os.getenv("USER") or "user") .. ".v2.sizes"
 
 -- The most bytes of scrollback to read. setup can change it.
 local max_scrollback = 512 * 1024
