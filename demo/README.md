@@ -89,8 +89,6 @@ The demo sets the `open_cmd` of the plugin to a script that starts a separate Ch
 
 Your own Chrome windows stay open, and they do not go into the recording.
 
-The demo also sets `max_height` to 0.5. With the default of 0.4, the picker in a window that is 700 points high shows only three of the four URLs.
-
 The script then opens the plugin a third time. It types `pull` to filter the list, and marks the pull request URL with `Tab`. It clears the filter with `Ctrl+U`, moves up to the local Vite URL, and marks it with `Tab`. Then it copies both URLs with `Ctrl+Y`. At the end, the demo pane runs `pbpaste` to show the two copied URLs, one on each line.
 
 The script presses the keys without the keyboard, so the recording shows a caption at the bottom of the window for each key: `Cmd+U` (the key binding from the main README), `Enter`, `Tab`, `Ctrl+U`, and `Ctrl+Y`. Each caption shows for one second. The script uses `osascript` to draw each caption as an image, and `ffmpeg` to put it on the video. The captions are not on the screen while the script records.
