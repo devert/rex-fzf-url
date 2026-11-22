@@ -38,13 +38,14 @@ fail() {
 # folders that shell startup files add. So add the folders where fzf and
 # other tools are usually installed. They go last, so PATH still wins.
 # FZF_URL_EXTRA_PATH replaces the list, for the tests.
-# An empty part in PATH means the current folder, so join only the parts
-# that are not empty.
-# Export PATH, because bash does not export the default PATH that it sets
-# when it starts with no PATH. nohup and other programs need the folders too.
+# An empty part, `.`, or another relative part in PATH finds programs in the
+# current folder. Bash's default PATH, when it starts with no PATH, ends in
+# `.`. So keep only the parts that start with `/`.
+# Export PATH, because bash does not export the default PATH that it sets.
+# nohup and other programs need the folders too.
 # With `set -u`, an unset HOME would stop the script, so get HOME from the
-# user database then.
-HOME=${HOME:-$(cd ~ 2>/dev/null && pwd)}
+# user database then. Export it for fzf and the opener.
+export HOME=${HOME:-$(cd ~ 2>/dev/null && pwd)}
 default_extra="/opt/homebrew/bin:/usr/local/bin" # Homebrew
 default_extra+=":/opt/local/bin"                 # MacPorts
 default_extra+=":$HOME/.fzf/bin"                 # the fzf install script
@@ -53,8 +54,16 @@ default_extra+=":$HOME/.nix-profile/bin"         # Nix
 default_extra+=":/etc/profiles/per-user/${USER:-$(id -un)}/bin:/run/current-system/sw/bin" # nix-darwin
 default_extra+=":$HOME/.local/share/mise/shims"  # mise
 extra=${FZF_URL_EXTRA_PATH-$default_extra}
-PATH=${PATH:+$PATH${extra:+:}}$extra
-export PATH
+new_path=
+old_ifs=$IFS
+IFS=:
+set -f
+for dir in $PATH:$extra; do
+    case $dir in /*) new_path=${new_path:+$new_path:}$dir ;; esac
+done
+set +f
+IFS=$old_ifs
+export PATH=$new_path
 
 # Read and remove the URL file first, so that no failure leaves it behind.
 url_file="${1:-}"
@@ -70,8 +79,7 @@ if [[ -n "${FZF_URL_FZF_PATH:-}" ]]; then
     # slash would depend on the folder of this pane, which the user does not
     # know, so reject it.
     case $fzf in
-        /*) ;;
-        */*) fail "fzf_path must start with / or ~/: $FZF_URL_FZF_PATH" ;;
+        */*) [[ "$fzf" == /* ]] || fail "fzf_path must start with / or ~/: $FZF_URL_FZF_PATH" ;;
         *) fzf=$(type -P "$fzf") || fail "fzf_path not found in PATH: $FZF_URL_FZF_PATH" ;;
     esac
     [[ -f "$fzf" && -x "$fzf" ]] || fail "fzf_path is not an executable file: $FZF_URL_FZF_PATH"
@@ -151,11 +159,10 @@ selection=$(printf '%s\n' "$urls" | "$fzf" \
 # an fzf that is too old for these options, gets a message. fzf prints its
 # own error above it.
 fzf_status=$?
-case $fzf_status in
-    0) ;;
-    1 | 130) exit 0 ;;
-    *) fail "fzf failed with exit status $fzf_status" ;;
-esac
+if [[ "$fzf_status" -ne 0 ]]; then
+    [[ "$fzf_status" -eq 1 || "$fzf_status" -eq 130 ]] && exit 0
+    fail "fzf failed with exit status $fzf_status"
+fi
 
 key=${selection%%$'\n'*}
 chosen=

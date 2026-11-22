@@ -26,6 +26,8 @@ fake() {
 fake fzf 'printf "%s\n" "$@" >"$LOG/fzf.args"; cat >"$LOG/fzf.in"; printf "%b" "${FAKE_FZF_OUTPUT:-}"; exit "${FAKE_FZF_EXIT:-0}"'
 fake open 'printf "%s\n" "$*" >>"$LOG/open"'
 fake myopen 'printf "%s\n" "$*" >>"$LOG/myopen"'
+# envopen logs the URL, HOME, and PATH that it gets.
+fake envopen 'printf "%s\n" "$*" "$HOME" "$PATH" >>"$LOG/envopen"'
 fake pbcopy 'printf "[%s]" "$*" >>"$LOG/pbcopy"; cat >>"$LOG/pbcopy"'
 fake xclip 'printf "[%s]" "$*" >>"$LOG/xclip"; cat >>"$LOG/xclip"'
 fake xdg-open 'printf "%s\n" "$*" >>"$LOG/xdg-open"'
@@ -116,16 +118,18 @@ run "$two" FAKE_FZF_EXIT=2
 check_eq "fzf error fails" "1" "$status"
 check_eq "fzf error message" "fzf-url: fzf failed with exit status 2" "$err"
 
-# Without HOME, the picker still runs, and the home install folders come
-# from the user database. No PATH: bash sets a default PATH, which the
-# picker exports, so nohup finds the opener.
+# Without HOME, the picker gets HOME from the user database and exports it.
+# No PATH: bash sets a default PATH that ends in `.`. The picker drops the
+# `.` and exports the rest, so nohup finds the opener.
 LOG=$(mktemp -d "$TMP/log.XXXX")
 printf '%s\n' "$two" >"$TMP/urls"
 env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} LOG="$LOG" FZF_URL_EXTRA_PATH="$FAKE" \
-  FZF_URL_OPEN_CMD=myopen FAKE_FZF_OUTPUT='\nhttps://a.example.com\n' \
+  FZF_URL_OPEN_CMD=envopen FAKE_FZF_OUTPUT='\nhttps://a.example.com\n' \
   /bin/bash "$DIR/bin/picker.sh" "$TMP/urls" >/dev/null 2>"$TMP/stderr"
 check_eq "no HOME or PATH exits 0" "0" "$?"
-check_eq "no PATH: open_cmd found in an install folder" "https://a.example.com" "$(log myopen)"
+check_eq "no PATH: open_cmd found in an install folder" "https://a.example.com" "$(log envopen | sed -n 1p)"
+check_eq "no HOME: the opener gets HOME" "$(cd ~ && pwd)" "$(log envopen | sed -n 2p)"
+check_eq "no PATH: the opener gets no . in PATH" "/usr/gnu/bin:/usr/local/bin:/bin:/usr/bin:$FAKE" "$(log envopen | sed -n 3p)"
 
 # The fzf height is the rows of the URL list plus 4, at most FZF_URL_ROWS.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
@@ -186,6 +190,12 @@ run "$two" PATH="$NOFZF:/bin"
 check_eq "empty extra path does not search the current folder" "1" "$status"
 run "$two" PATH= FZF_URL_EXTRA_PATH="$NOFZF:/bin"
 check_eq "empty PATH does not search the current folder" "1" "$status"
+run "$two" PATH=".:$NOFZF:/bin"
+check_eq "a . in PATH does not search the current folder" "1" "$status"
+mkdir -p "$TMP/cwd/sub"
+cp "$FAKE/fzf" "$TMP/cwd/sub/fzf"
+run "$two" PATH="sub:$NOFZF:/bin"
+check_eq "a relative part in PATH is not searched" "1" "$status"
 cd "$DIR" || exit 1
 
 # Without fzf in PATH, find it in the usual install folders, after PATH.
