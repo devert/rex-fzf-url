@@ -111,17 +111,16 @@ local function leaves(node, out)
 end
 
 -- Return the size of a terminal block: the size the app wants for it, as
--- the block's own size can differ when another client controls it. Also
--- return the whole reply of the size method.
+-- the block's own size can differ when another client controls it.
 local function block_size(block_id)
   local s = rex.block.call(terminal, "size", { block_id = block_id })
   if s == nil then return nil end
-  return (s.desired and s.desired[1]) or s, s
+  return (s.desired and s.desired[1]) or s
 end
 
 -- Return what the popups need to know about block_id: the window that holds
--- it, the range of possible window sizes in cells, a key for the layout of
--- the window, and the cell size in pixels. Rex measures floating pane bounds
+-- it, the range of possible window sizes in cells, and a key for the layout
+-- of the window. Rex measures floating pane bounds
 -- as fractions of the window, so work out the window size from the size and
 -- the rect of each tiled pane in it. An earlier popup can have measured it
 -- better (see bin/measure.lua). Take that when the layout is the same.
@@ -148,10 +147,9 @@ local function locate(block_id)
 
   local key = {}
   for _, leaf in ipairs(found) do
-    local want, s = block_size(leaf.block_id)
+    local want = block_size(leaf.block_id)
     local rect = leaf.rect
     if want ~= nil and type(rect) == "table" and rect[3] > 0 and rect[4] > 0 then
-      if leaf.block_id == block_id then where.cell = s end
       key[#key + 1] = string.format("%s %.4f %.4f %d %d", leaf.block_id, rect[3], rect[4], want.columns, want.rows)
       local cl, ch = popup_size.tiled_range(want.columns, rect[3], false)
       local rl, rh = popup_size.tiled_range(want.rows, rect[4], true)
@@ -176,51 +174,40 @@ local function locate(block_id)
 end
 
 -- Open a floating pane with bounds [x, y, w, h], as fractions of the window
--- that holds the block. size is the terminal's starting size.
-local function open_popup(where, bounds, size, command)
+-- that holds the block. The terminal starts at 80x24, and the app sets its
+-- size to the pane a moment later. Don't give a starting size: the terminal
+-- uses the size that its owner asks for, and the app, which creates and owns
+-- the popup, then keeps that size and doesn't fit the terminal to the pane.
+local function open_popup(where, bounds, command)
   return rex.session.new_layer{
     window_id = where.window_id,
     bounds = bounds,
     focus = true,
     layout = rex.layout.block{
       flavor = "com.superlogical.terminal.shell",
-      options = { command = command, size = size },
+      options = { command = command },
     },
   }
 end
 
 -- Return centered bounds for a popup whose terminal is cols x rows cells,
--- within the size limits, and a starting size for its terminal.
--- The app sets the size of a new pane a moment after it opens. The bounds
--- give at least cols x rows cells for every window size that the plugin
--- thinks is possible, so the pane never has to change size later.
--- Without a starting size, the terminal starts at 80x24 and the app resizes
--- it a moment later. Lines that fzf draws before the resize then stay on the
--- screen. The starting size is the smallest that the pane can get, because
--- the terminal reflows its lines when it gets narrower, but not when it gets
--- wider.
+-- within the size limits. The bounds give at least cols x rows cells for
+-- every window size that the plugin thinks is possible.
 -- rows can also be a function that takes the fewest columns that the pane
 -- can get, and returns the rows.
 local function popup_bounds(where, cols, rows)
-  local w, start_cols = popup_size.fraction(cols, where.cols[1], where.cols[2], max_width)
-  if type(rows) == "function" then rows = rows(start_cols) end
-  local h, start_rows = popup_size.fraction(rows, where.rows[1], where.rows[2], max_height)
-  local bounds = { (1 - w) / 2, (1 - h) / 2, w, h }
-  local size = { columns = start_cols, rows = start_rows }
-  -- Keep the cell size of the source pane, for programs that draw images.
-  local px = where.cell
-  if px ~= nil and (px.cell_width_px or 0) > 0 and (px.cell_height_px or 0) > 0 then
-    size.cell_width_px, size.cell_height_px = px.cell_width_px, px.cell_height_px
-  end
-  return bounds, size
+  local w, least_cols = popup_size.fraction(cols, where.cols[1], where.cols[2], max_width)
+  if type(rows) == "function" then rows = rows(least_cols) end
+  local h = popup_size.fraction(rows, where.rows[1], where.rows[2], max_height, true)
+  return { (1 - w) / 2, (1 - h) / 2, w, h }
 end
 
 -- Return the rows that fzf needs for the URLs in a pane that is cols
--- columns wide. A URL that is wider than the list wraps: fzf puts cols - 5
+-- columns wide. A URL that is wider than the list wraps: fzf puts cols - 4
 -- characters on the first row, and 2 fewer on each next row, which starts
 -- with a wrap mark.
 local function list_rows(urls, cols)
-  local text = math.max(cols - 5, 3)
+  local text = math.max(cols - 4, 3)
   local rows = 0
   for _, url in ipairs(urls) do
     if #url <= text then
@@ -232,9 +219,10 @@ local function list_rows(urls, cols)
   return rows
 end
 
--- Return bounds for the picker, sized to its content like
--- junegunn/tmux-fzf-url: the longest line + 6 columns, and the rows of the
--- URL list plus 4 rows for the prompt, the help text, and two border lines.
+-- Return bounds for the picker, sized to its content: the longest line + 4
+-- columns, and the rows of the URL list plus 4 rows for the prompt, the help
+-- text, and two border lines. The 4 columns are the left padding, the
+-- pointer and the space after it, and the scroll bar column on the right.
 -- Rex pads the bottom of a floating pane, so the picker needs no padding
 -- row. When max_width makes the pane narrower than a URL, the URL wraps, so
 -- count the rows at the fewest columns that the pane can get. Also return
@@ -245,18 +233,17 @@ local function picker_bounds(where, urls)
     if #url > width then width = #url end
   end
   local rows
-  local bounds, size = popup_bounds(where, width + 6, function(cols)
+  local bounds = popup_bounds(where, width + 4, function(cols)
     rows = list_rows(urls, cols)
     return rows + 4
   end)
-  return bounds, size, rows
+  return bounds, rows
 end
 
 -- Show a one-line message in a small floating pane sized to the message.
 -- The pane closes after one second, or when you press a key.
 local function show_message(where, message)
-  local bounds, size = popup_bounds(where, #message + 2, 1)
-  open_popup(where, bounds, size,
+  open_popup(where, popup_bounds(where, #message + 2, 1),
     { "bash", plugin_dir .. "/bin/message.sh", message, where.block_id })
 end
 
@@ -327,14 +314,13 @@ function M.setup(opts)
 
       -- Terminal options have no env setting, so env(1) passes the options
       -- to the picker.
-      local bounds, size, rows = picker_bounds(where, urls)
-      local _, layer_err = open_popup(where, bounds, size, {
+      local bounds, rows = picker_bounds(where, urls)
+      local _, layer_err = open_popup(where, bounds, {
         "env",
         "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
         "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
         "FZF_URL_FZF_OPTIONS=" .. (opts.fzf_options or ""),
         "FZF_URL_SOURCE_BLOCK=" .. ctx.block_id,
-        "FZF_URL_ROWS=" .. size.rows,
         "FZF_URL_LIST_ROWS=" .. rows,
         "FZF_URL_CACHE=" .. cache_path,
         "FZF_URL_MEASURE=" .. string.format("%s %s %.6f %.6f",

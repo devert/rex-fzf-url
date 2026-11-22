@@ -34,7 +34,7 @@ end
 if want == nil then return end
 
 local col_low, col_high = size.floating_range(want.columns, w)
-local row_low, row_high = size.floating_range(want.rows, h)
+local row_low, row_high = size.floating_range(want.rows, h, true)
 local cache = size.load(path)
 size.merge(cache, window, key, col_low, col_high, row_low, row_high)
 size.save(path, cache)

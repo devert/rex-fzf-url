@@ -48,7 +48,7 @@ picker() {
   shift
   LOG=$(mktemp -d "$TMP/log.XXXX")
   env -i ${BASH_ENV:+BASH_ENV="$BASH_ENV"} HOME="$HOME" PATH="$FAKE:/bin" LOG="$LOG" \
-    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 FZF_URL_ROWS=40 "$@" \
+    REX_BIN_DIR="$FAKE" FZF_URL_SOURCE_BLOCK=block:9 "$@" \
     /bin/bash "$DIR/bin/picker.sh" "$file" >/dev/null 2>"$TMP/stderr"
   status=$?
   err=$(grep '^fzf-url:' "$TMP/stderr")
@@ -111,14 +111,13 @@ check_eq "escape opens nothing" "" "$(log open)"
 run "$two" FAKE_FZF_OUTPUT='\n'
 check_eq "enter with no match opens nothing" "" "$(log open)"
 
-# The fzf height is the rows of the URL list plus 4, at most FZF_URL_ROWS.
+# The fzf height is the rows of the URL list plus 4. fzf itself limits it to
+# the pane height.
 height() { log fzf.args | grep -A1 -x -- --height | tail -1; }
 run "$three" FZF_URL_LIST_ROWS=3
 check_eq "height fits the URLs" "7" "$(height)"
 run "$three" FZF_URL_LIST_ROWS=5
 check_eq "height fits wrapped URLs" "9" "$(height)"
-run "$three" FZF_URL_LIST_ROWS=3 FZF_URL_ROWS=6
-check_eq "height is at most the pane rows" "6" "$(height)"
 run "$three"
 check_eq "height counts the URLs with no count given" "7" "$(height)"
 
@@ -142,12 +141,11 @@ check_eq "no opener fails" "1" "$status"
 check_eq "no opener message" 'fzf-url: no opener found (open/xdg-open/$BROWSER)' "$err"
 mv "$TMP/open" "$TMP/xdg-open" "$FAKE/"
 
-# With no starting size, wait while the pane is still 80x24, for at most
-# 25 tries.
-run "$two" FZF_URL_ROWS= FAKE_STTY="24 80"
-check_eq "no starting size: waits for the resize" "25" "$(log sleep | wc -l | tr -d ' ')"
-run "$two" FZF_URL_ROWS= FAKE_STTY="30 100"
-check_eq "no starting size: no wait after the resize" "" "$(log sleep)"
+# Wait while the pane is still 80x24, for at most 25 tries.
+run "$two" FAKE_STTY="24 80"
+check_eq "waits for the resize" "25" "$(log sleep | wc -l | tr -d ' ')"
+run "$two" FAKE_STTY="30 100"
+check_eq "no wait after the resize" "" "$(log sleep)"
 
 # With a measure spec, start bin/measure.lua in the background.
 run "$two" REX_BLOCK=block:7 FZF_URL_CACHE=/tmp/cache FZF_URL_MEASURE="window:1 k 0.5 0.4"

@@ -10,7 +10,6 @@
 #   FZF_URL_COPY_CMD     command that copies stdin to the clipboard
 #   FZF_URL_FZF_OPTIONS  extra fzf options
 #   FZF_URL_SOURCE_BLOCK the pane that ran the action
-#   FZF_URL_ROWS         the starting height of the pane, in rows
 #   FZF_URL_LIST_ROWS    the rows of the URL list, with wrapped URLs
 #   FZF_URL_CACHE        the file where bin/measure.lua saves window sizes
 #   FZF_URL_MEASURE      what bin/measure.lua needs to know about this pane
@@ -46,18 +45,14 @@ rm -f "$url_file"
 # can be one or two rows taller than that, and the extra rows are then at
 # the bottom. Two extra rows can happen in the first popup in a window,
 # before bin/measure.lua saves the size of the window.
-# init.lua starts the terminal at the smallest size that the pane can get,
-# and sets FZF_URL_ROWS to its height. Without it, the terminal starts at the
-# default size of 80x24, and the app sets the size of the pane shortly after
-# it opens. fzf draws in place with --height, so lines that it draws before
-# the resize stay on the screen. So then wait for the resize, for at most
-# half a second.
-if [[ -z "${FZF_URL_ROWS:-}" ]]; then
-    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
-        [[ "$(stty size 2>/dev/null)" != "24 80" ]] && break
-        sleep 0.02
-    done
-fi
+# The terminal starts at the default size of 80x24, and the app sets the size
+# of the pane shortly after it opens. fzf draws in place with --height, so
+# lines that it draws before the resize stay on the screen. So wait for the
+# resize, for at most half a second.
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25; do
+    [[ "$(stty size 2>/dev/null)" != "24 80" ]] && break
+    sleep 0.02
+done
 
 # Count the URLs in bash when init.lua doesn't pass the rows of the list.
 # This count doesn't know about wrapped URLs.
@@ -71,12 +66,9 @@ if [[ -z "$count" ]]; then
     set +f
     count=${#lines[@]}
 fi
+# With more URLs than fit, fzf limits --height to the pane height, so it
+# fills the pane and scrolls the list.
 height=$((count + 4))
-# With more URLs than fit, fill the pane and scroll the list. fzf limits
-# --height to the pane height, also after a resize. But the pane can get a
-# row more than FZF_URL_ROWS, and fzf would then grow by a row while you
-# watch. So use FZF_URL_ROWS as the height.
-[[ -n "${FZF_URL_ROWS:-}" && "$height" -gt "$FZF_URL_ROWS" ]] && height=$FZF_URL_ROWS
 
 # Save the size that the app gives this pane, so that the next popup in this
 # window fits its content exactly. This runs in the background, so fzf starts
@@ -101,7 +93,7 @@ selection=$(printf '%s\n' "$urls" | fzf \
     --header 'Enter: Open URL / CTRL-Y: Copy to clipboard' \
     --header-border top --header-first \
     --highlight-line --info inline-right \
-    --padding 0,1,0,1 \
+    --padding 0,0,0,1 \
     --height "$height" \
     ${FZF_URL_FZF_OPTIONS:-}) || exit 0
 

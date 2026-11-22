@@ -83,7 +83,7 @@ H.eq("owned at once: one call", calls, 1)
 local cache = size.load(path)
 local e = cache["window:1"]
 local cl, ch = size.floating_range(80, 0.5)
-local rl, rh = size.floating_range(20, 0.4)
+local rl, rh = size.floating_range(20, 0.4, true)
 H.ok("owned at once: saves the owner's size",
   e ~= nil and e.key == "abc123"
     and math.abs(e.cols[1] - cl) < 1e-6 and math.abs(e.cols[2] - ch) < 1e-6

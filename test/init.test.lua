@@ -214,7 +214,7 @@ local function leaf(id, x, y, w, h) return { block_id = id, rect = { x, y, w, h 
 local function split(a, b) return { split = { before = a, after = b } } end
 
 -- Run locate for block_id with the given windows, and sizes by block:
--- { columns, rows } and an optional cell size.
+-- { columns, rows }.
 local function run_locate(block_id, windows, sizes)
   return with_rex({
     session = { view = function() return { windows = windows } end },
@@ -223,7 +223,7 @@ local function run_locate(block_id, windows, sizes)
       local s = sizes[args.block_id]
       if s == nil then return nil end
       if s.old then return { columns = s[1], rows = s[2] } end
-      return { desired = { { columns = s[1], rows = s[2] } }, cell_width_px = s.cw, cell_height_px = s.ch }
+      return { desired = { { columns = s[1], rows = s[2] } } }
     end },
   }, function(m) return m._locate(block_id) end)
 end
@@ -237,11 +237,10 @@ end
 fake_cache = {}
 
 local one = { { window_id = "window:1", layers = { { kind = "tiled", layout = leaf("block:1", 0, 0, 1, 1) } } } }
-local w = run_locate("block:1", one, { ["block:1"] = { 150, 40, cw = 8, ch = 16 } })
+local w = run_locate("block:1", one, { ["block:1"] = { 150, 40 } })
 H.eq("one pane: window", w.window_id, "window:1")
 range_is("one pane: columns", w.cols, 151.5, 153.5)
 range_is("one pane: rows", w.rows, 40.1, 43.5)
-H.eq("one pane: cell size", w.cell and w.cell.cell_width_px, 8)
 
 w = run_locate("block:1", one, { ["block:1"] = { 150, 40, old = true } })
 range_is("a server with no desired size", w.cols, 151.5, 153.5)
@@ -273,7 +272,6 @@ local floating = { { window_id = "window:1", layers = {
 w = run_locate("block:5", floating, { ["block:1"] = { 150, 40 }, ["block:5"] = { 80, 20 } })
 H.eq("floating block: window", w.window_id, "window:1")
 range_is("floating block: tiled columns", w.cols, 151.5, 153.5)
-H.eq("floating block: no cell size from tiled panes", w.cell, nil)
 
 -- Only the window that holds the block counts.
 local windows = {
@@ -311,57 +309,50 @@ fake_cache = {}
 -- popup_bounds and picker_bounds
 
 local P = with_rex({}, function(m) return m end)
-local where = { cols = { 149.5, 150.5 }, rows = { 39.5, 40.5 }, cell = { cell_width_px = 8, cell_height_px = 16 } }
+local where = { cols = { 149.5, 150.5 }, rows = { 39.5, 40.5 } }
 
-local b, s = P._popup_bounds(where, 50, 10)
-local fw, start_cols = real_size.fraction(50, 149.5, 150.5, 0.8)
-local fh, start_rows = real_size.fraction(10, 39.5, 40.5, 0.4)
+local b = P._popup_bounds(where, 50, 10)
+local fw = real_size.fraction(50, 149.5, 150.5, 0.8)
+local fh = real_size.fraction(10, 39.5, 40.5, 0.4, true)
 H.ok("popup bounds are centered",
   near(b[1], (1 - fw) / 2) and near(b[2], (1 - fh) / 2) and near(b[3], fw) and near(b[4], fh))
-H.ok("popup starting size", s.columns == start_cols and s.rows == start_rows,
-  s.columns .. "x" .. s.rows)
-H.ok("popup keeps the cell size", s.cell_width_px == 8 and s.cell_height_px == 16)
 
 b = P._popup_bounds(where, 400, 100)
 H.ok("popup stays within the limits", b[3] <= 0.8 and b[4] <= 0.4, b[3] .. " " .. b[4])
 
-for _, cell in ipairs({ { cell_width_px = 0, cell_height_px = 16 }, { cell_width_px = 8 } }) do
-  s = select(2, P._popup_bounds({ cols = where.cols, rows = where.rows, cell = cell }, 50, 10))
-  H.ok("popup skips a cell size that is not complete", s.cell_width_px == nil and s.cell_height_px == nil)
-end
-
--- The header is 43 characters, so short URLs give 43 + 6 columns.
+-- The header is 43 characters, so short URLs give 43 + 4 columns.
 local function same_bounds(name, b1, b2)
   H.ok(name, near(b1[3], b2[3]) and near(b1[4], b2[4]),
     string.format("%.4f %.4f and %.4f %.4f", b1[3], b1[4], b2[3], b2[4]))
 end
 same_bounds("picker with short URLs fits the header",
-  P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 49, 6))
+  P._picker_bounds(where, { "https://a.example.com", "https://b.example.com" }), P._popup_bounds(where, 47, 6))
 local long = "https://example.com/" .. string.rep("x", 60)
 same_bounds("picker fits the longest URL",
-  P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 6, 6))
-H.eq("picker list rows with no wrap", select(3, P._picker_bounds(where, { "https://a.example.com", long })), 2)
+  P._picker_bounds(where, { "https://a.example.com", long }), P._popup_bounds(where, #long + 4, 6))
+H.eq("picker list rows with no wrap", select(2, P._picker_bounds(where, { "https://a.example.com", long })), 2)
 
--- fzf puts cols - 5 characters on the first row of a URL, and 2 fewer on
--- each next row. These counts come from fzf at 30 and 40 columns.
+-- fzf puts cols - 4 characters on the first row of a URL, and 2 fewer on
+-- each next row. These counts come from fzf 0.75 at 30 and 40 columns.
 local pr = "https://github.com/acme/acme-app/pull/new/fix-login-redirect"
 local a120 = "https://example.com/" .. string.rep("a", 100)
 H.eq("list rows: short URLs", P._list_rows({ "https://a.example.com", "http://localhost:5173/" }, 40), 2)
-H.eq("list rows: a URL that fits exactly", P._list_rows({ string.rep("x", 35) }, 40), 1)
-H.eq("list rows: a URL one character too long", P._list_rows({ string.rep("x", 36) }, 40), 2)
+H.eq("list rows: a URL that fits exactly", P._list_rows({ string.rep("x", 36) }, 40), 1)
+H.eq("list rows: a URL one character too long", P._list_rows({ string.rep("x", 37) }, 40), 2)
 H.eq("list rows: 60 characters at 30 columns", P._list_rows({ pr }, 30), 3)
 H.eq("list rows: 60 characters at 40 columns", P._list_rows({ pr }, 40), 2)
-H.eq("list rows: 120 characters at 30 columns", P._list_rows({ a120 }, 30), 6)
+H.eq("list rows: 120 characters at 30 columns", P._list_rows({ a120 }, 30), 5)
 H.eq("list rows: 120 characters at 40 columns", P._list_rows({ a120, pr, "http://localhost:5173/" }, 40), 7)
 
 -- When max_width makes the pane narrower than the longest URL, the picker
 -- gets a row for each wrapped part, counted at the fewest columns that the
 -- pane can get.
 local narrow = { cols = { 79.5, 80.5 }, rows = { 39.5, 40.5 } }
-local nb, ns, nrows = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
-H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, ns.columns))
+local nb, nrows = P._picker_bounds(narrow, { pr, "http://localhost:5173/" })
+local least_cols = select(2, real_size.fraction(#pr + 4, 79.5, 80.5, 0.8))
+H.eq("narrow picker: list rows", nrows, P._list_rows({ pr, "http://localhost:5173/" }, least_cols))
 H.ok("narrow picker: a URL wraps", nrows > 2, tostring(nrows))
-same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 6, nrows + 4))
+same_bounds("narrow picker: height fits the wrapped rows", nb, P._popup_bounds(narrow, #pr + 4, nrows + 4))
 
 ------------------------------------------------------------------------
 -- The fzf_url action
@@ -380,7 +371,8 @@ local function action(opts, fake)
       view = function() return { windows = one } end,
       new_layer = function(spec)
         log.layers[#log.layers + 1] = spec
-        return fake.layer, fake.layer_err
+        if fake.layer_err then return nil, fake.layer_err end
+        return fake.layer or { block_ids = { "block:popup" .. #log.layers } }
       end,
     },
     block = { call = function(_, method)
@@ -437,6 +429,7 @@ H.ok("no URLs shows the message",
   msg[1] == "bash" and msg[2]:match("/bin/message%.sh$") and msg[3] == "No URLs found." and msg[4] == "block:1")
 H.ok("message popup is in the window and has focus",
   log.layers[1].window_id == "window:1" and log.layers[1].focus == true)
+H.eq("message popup has no starting size", log.layers[1].layout.options.size, nil)
 
 -- URLs: the picker gets them newest first, and the options.
 def, log = action({ open_cmd = "firefox", copy_cmd = "xclip", fzf_options = "--exact" },
@@ -455,7 +448,8 @@ H.eq("picker gets copy_cmd", env(cmd, "FZF_URL_COPY_CMD"), "xclip")
 H.eq("picker gets fzf_options", env(cmd, "FZF_URL_FZF_OPTIONS"), "--exact")
 H.eq("picker gets the source block", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
 H.eq("picker gets the list rows", env(cmd, "FZF_URL_LIST_ROWS"), "3")
-H.eq("picker gets the starting rows", env(cmd, "FZF_URL_ROWS"), tostring(log.layers[1].layout.options.size.rows))
+H.eq("picker popup has no starting size", log.layers[1].layout.options.size, nil)
+H.eq("picker gets no starting rows", env(cmd, "FZF_URL_ROWS"), nil)
 H.ok("picker gets the measure spec", (env(cmd, "FZF_URL_MEASURE") or ""):match("^window:1 %x+ [%d.]+ [%d.]+$"),
   env(cmd, "FZF_URL_MEASURE"))
 
