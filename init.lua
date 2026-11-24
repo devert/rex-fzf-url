@@ -31,6 +31,40 @@ local old_cache_paths = { cache_base .. ".sizes" }
 -- The most bytes of scrollback to read. setup can change it.
 local max_scrollback = 512 * 1024
 
+-- The plugin's folder on the host that runs the popups, or nil when that is
+-- this machine. setup can change it.
+local pane_dir = nil
+
+-- The sh script that starts a popup from pane_dir, run as
+-- sh -c launcher sh DIR SCRIPT ARGS... on the popup's host. It expands a
+-- leading ~ to that host's home, writes the URLs in FZF_URL_LIST to a file
+-- there for picker.sh, and runs DIR/bin/SCRIPT.
+local launcher = table.concat({
+  'd=$1 s=$2',
+  'shift 2',
+  'case $d in "~") d=$HOME ;; "~/"*) d=$HOME/${d#"~/"} ;; esac',
+  'if [ -n "${FZF_URL_LIST+set}" ]; then',
+  '  f=$(mktemp) || exit 1',
+  '  printf \'%s\\n\' "$FZF_URL_LIST" > "$f"',
+  '  unset FZF_URL_LIST',
+  '  set -- "$f" "$@"',
+  'fi',
+  'exec bash "$d/bin/$s" "$@"',
+}, "\n")
+
+-- Return the command that runs the helper script bin/script with args in a
+-- popup: from this plugin's folder, or through the launcher from pane_dir.
+local function script_command(script, args)
+  local cmd
+  if pane_dir == nil then
+    cmd = { "bash", plugin_dir .. "/bin/" .. script }
+  else
+    cmd = { "sh", "-c", launcher, "sh", pane_dir, script }
+  end
+  for _, a in ipairs(args) do cmd[#cmd + 1] = a end
+  return cmd
+end
+
 -- Read the screen and scrollback as plain text: all of it, or only the
 -- newest lines when it is longer than limit bytes. Then only the lines that
 -- fit completely in the last limit bytes are kept, so that no line starts
@@ -354,7 +388,7 @@ end
 -- The pane closes after one second, or when you press a key.
 local function show_message(where, message)
   open_popup(where, popup_bounds(where, width_of(message) + 2, 1),
-    { "bash", plugin_dir .. "/bin/message.sh", message, where.block_id })
+    script_command("message.sh", { message, where.block_id }))
 end
 
 local function fail(message)
@@ -393,6 +427,10 @@ function M.setup(opts)
       fail(name .. " must be a string")
     end
   end
+  if opts.pane_dir ~= nil and type(opts.pane_dir) ~= "string" then
+    fail("pane_dir must be a string")
+  end
+  pane_dir = opts.pane_dir
   local extract_cmd = { "perl", plugin_dir .. "/bin/extract-urls.pl" }
   for _, arg in ipairs(extra_args(opts.extra_patterns)) do
     table.insert(extract_cmd, arg)
@@ -430,10 +468,18 @@ function M.setup(opts)
         return
       end
 
-      local url_file = os.tmpname()
-      local f = assert(io.open(url_file, "w"))
-      f:write(table.concat(urls, "\n"), "\n")
-      f:close()
+      -- The URLs go to picker.sh in a file. A popup on another host can't
+      -- read a file on this machine, so with pane_dir they go in the
+      -- command, and the launcher writes the file on that host.
+      local url_file, list_arg
+      if pane_dir == nil then
+        url_file = os.tmpname()
+        local f = assert(io.open(url_file, "w"))
+        f:write(table.concat(urls, "\n"), "\n")
+        f:close()
+      else
+        list_arg = "FZF_URL_LIST=" .. table.concat(urls, "\n")
+      end
 
       -- Terminal options have no env setting, so env(1) passes the options
       -- to the picker.
@@ -441,7 +487,7 @@ function M.setup(opts)
       -- picker.sh gets the layout values that it needs to count the rows
       -- of wrapped URLs, before their widths.
       wrap = layout.url_cols .. " " .. layout.wrap_cols .. " " .. table.concat(wrap, " ")
-      local _, layer_err = open_popup(where, bounds, {
+      local command = {
         "env",
         "FZF_URL_OPEN_CMD=" .. (opts.open_cmd or ""),
         "FZF_URL_COPY_CMD=" .. (opts.copy_cmd or ""),
@@ -454,10 +500,14 @@ function M.setup(opts)
         "FZF_URL_CACHE=" .. cache_path,
         "FZF_URL_MEASURE=" .. string.format("%s %s %.6f %.6f",
           where.window_id or "none", where.key, bounds[3], bounds[4]),
-        "bash", plugin_dir .. "/bin/picker.sh", url_file,
-      })
+        list_arg,
+      }
+      for _, a in ipairs(script_command("picker.sh", { url_file })) do
+        command[#command + 1] = a
+      end
+      local _, layer_err = open_popup(where, bounds, command)
       if layer_err ~= nil then
-        os.remove(url_file)
+        if url_file ~= nil then os.remove(url_file) end
         fail(layer_err)
       end
     end,
