@@ -49,7 +49,7 @@ The flow spans Lua inside Rex and shell scripts inside a popup pane:
 
 1. `init.lua` `setup()` registers the `fzf_url` action (and binds `opts.key`). On run, `read_scrollback` reads the pane text via `rex.block.call(terminal, "format"/"blob_read")`, keeping only the newest `max_scrollback` bytes and trimming to whole lines and whole UTF-8 characters.
 2. The text is piped to `bin/extract-urls.pl` with `rex.exec`. It strips ANSI/OSC escapes. Then it matches one alternation per line: URL, git remote, `www.`, IPv4, and quoted `'user/repo'`. User `extra_patterns` arrive as `REGEX URL` argument pairs. Order of the alternation matters: an earlier match consumes its text.
-3. `init.lua` reverses the list (newest first), writes it to a temp file, and opens a floating layer running `bin/picker.sh` (or `bin/message.sh` for "No URLs found."). Terminal options have no env field, so settings pass as `env FZF_URL_*=... bash picker.sh <file>`.
+3. `init.lua` reverses the list (newest first), writes it to a temp file, and opens a floating layer running `bin/picker.sh` (or `bin/message.sh` for "No URLs found."). Terminal options have no env field, so settings pass as `env FZF_URL_*=... bash picker.sh <file>`. The popup runs on the session's host, which can be a remote machine. With `pane_dir` set, the popup runs `sh -c <launcher> sh <pane_dir> picker.sh` instead: the URLs travel in `FZF_URL_LIST`, and the launcher expands `~` and writes the URL file on that host.
 4. `bin/picker.sh` runs fzf and opens or copies the selection. When a floating pane closes, Rex does not refocus the source pane. So both scripts call `rex focus` on exit.
 
 ### Popup sizing

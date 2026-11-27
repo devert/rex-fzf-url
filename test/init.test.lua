@@ -562,6 +562,71 @@ cmd = command(log)
 H.eq("URL file is removed when the popup fails", io.open(cmd[#cmd]), nil)
 
 ------------------------------------------------------------------------
+-- pane_dir: popups on another host
+--
+-- The action runs where Rex reads init.lua, but a popup runs on the host of
+-- the session, which can be another machine. With pane_dir, the popup finds
+-- the scripts there, and gets the URLs in its command instead of in a file
+-- on this machine.
+
+H.raises("pane_dir that is not a string", "fzf-url: pane_dir must be a string", action, { pane_dir = 1 })
+
+def, log = action({ pane_dir = "~/plugins/fzf-url" })
+def.run({ block_id = "block:1" }, {})
+msg = command(log)
+H.ok("pane_dir: the message runs message.sh from pane_dir through sh",
+  msg[1] == "sh" and msg[2] == "-c" and msg[4] == "sh" and msg[5] == "~/plugins/fzf-url"
+  and msg[6] == "message.sh" and msg[7] == "No URLs found." and msg[8] == "block:1" and #msg == 8)
+
+def, log = action({ pane_dir = "~/plugins/fzf-url" },
+  { exec = { ok = true, stdout = "https://a.example.com\nhttps://b.example.com\n" } })
+def.run({ block_id = "block:1" }, {})
+cmd = command(log)
+H.eq("pane_dir: the picker gets the URLs newest first in its command",
+  env(cmd, "FZF_URL_LIST"), "https://b.example.com\nhttps://a.example.com")
+H.ok("pane_dir: the picker runs picker.sh from pane_dir through sh",
+  cmd[1] == "env" and cmd[#cmd - 5] == "sh" and cmd[#cmd - 4] == "-c" and cmd[#cmd - 2] == "sh"
+  and cmd[#cmd - 1] == "~/plugins/fzf-url" and cmd[#cmd] == "picker.sh")
+H.eq("pane_dir: the picker still gets the options", env(cmd, "FZF_URL_SOURCE_BLOCK"), "block:1")
+
+-- The sh script that starts a popup from pane_dir, run for real against
+-- fake scripts. Each fake prints its arguments, and picker.sh also prints
+-- the URL file that it gets.
+local launcher = cmd[#cmd - 3]
+local home = os.tmpname()
+os.remove(home)
+os.execute("mkdir -p '" .. home .. "/plugins/fzf-url/bin'")
+local fake = assert(io.open(home .. "/plugins/fzf-url/bin/picker.sh", "w"))
+fake:write('printf "picker %s\\n" "$#"; cat "$1"; rm -f "$1"\n')
+fake:close()
+fake = assert(io.open(home .. "/plugins/fzf-url/bin/message.sh", "w"))
+fake:write('printf "message %s|%s|%s\\n" "$#" "$1" "$2"\n')
+fake:close()
+
+local function quote(s) return "'" .. s:gsub("'", "'\\''") .. "'" end
+local function launch(env_list, pane_dir, script, ...)
+  local words = { "env", "HOME=" .. quote(home) }
+  if env_list then words[#words + 1] = "FZF_URL_LIST=" .. quote(env_list) end
+  for _, w in ipairs({ "sh", "-c", quote(launcher), "sh", quote(pane_dir), script }) do words[#words + 1] = w end
+  for _, a in ipairs({ ... }) do words[#words + 1] = quote(a) end
+  local p = io.popen(table.concat(words, " ") .. " 2>&1")
+  local out = p:read("*a")
+  p:close()
+  return out
+end
+
+H.eq("pane_dir: ~/ is the home of the popup's host, and the URLs arrive as a file",
+  launch("https://b.example.com\nhttps://a.example.com", "~/plugins/fzf-url", "picker.sh"),
+  "picker 1\nhttps://b.example.com\nhttps://a.example.com\n")
+H.eq("pane_dir: a path without ~ is used as it is",
+  launch("https://a.example.com", home .. "/plugins/fzf-url", "picker.sh"),
+  "picker 1\nhttps://a.example.com\n")
+H.eq("pane_dir: a popup with no URLs gets its own arguments",
+  launch(nil, "~/plugins/fzf-url", "message.sh", "No URLs found.", "block:1"),
+  "message 2|No URLs found.|block:1\n")
+os.execute("rm -rf '" .. home .. "'")
+
+------------------------------------------------------------------------
 -- The layout values against real fzf
 --
 -- Run bin/picker.sh with real fzf in a detached tmux session of a set

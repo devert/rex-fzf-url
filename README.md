@@ -105,6 +105,12 @@ The most text to read from the pane, in bytes. A large scrollback makes the list
 
 **Default**: `512 * 1024` (512 KB). That is about 6,000 lines of 80 characters.
 
+### `pane_dir`
+
+The folder of the plugin on the machine that runs the popups, such as `"~/.config/rex/plugins/rex-fzf-url"`. Set this when you use sessions on a remote Rex host. Rex runs the action on the machine that reads your `init.lua`, but it opens the popup on the host of the session. Without this value, the popup looks for the plugin's scripts at their path on your machine, and fails on a host where that path does not exist. The popup's host expands a leading `~` to its own home folder. Install the plugin on each host, in this folder. With this value, the URLs go to the popup in its command, not in a file on your machine.
+
+**Default**: none. The popup runs the scripts from the folder that holds `init.lua`.
+
 ### `extra_patterns`
 
 A list of your own kinds of text to find in the pane and show as URLs. For example, the plugin can show the issue name `ENG-123` as a link to that issue in Linear. Each item in the list is a table with two values:
